@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="WebCode 本地模式"
+            android:textColor="@color/text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="直连 DeepSeek · 内嵌 Termux 执行环境 · 数据全在本机"
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
+
+        <!-- 状态卡 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp"
+            android:layout_marginTop="14dp">
+
+            <TextView
+                android:id="@+id/status_bootstrap"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/status_node"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                android:id="@+id/status_agent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                android:id="@+id/status_battery"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- 连接模型 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="连接模型"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="接口地址"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/llm_base_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:hint="https://api.deepseek.com"
+                android:padding="12dp"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="模型名"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:layout_marginTop="12dp" />
+
+            <EditText
+                android:id="@+id/llm_model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:hint="deepseek-v4-flash"
+                android:padding="12dp"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="API Key"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:layout_marginTop="12dp" />
+
+            <EditText
+                android:id="@+id/llm_api_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:hint="sk-..."
+                android:inputType="textPassword"
+                android:padding="12dp"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="思考模式"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:gravity="center_vertical" />
+
+                <Spinner
+                    android:id="@+id/reasoning_mode"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="思考强度"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:gravity="center_vertical" />
+
+                <Spinner
+                    android:id="@+id/effort_spinner"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/save_llm_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:backgroundTint="@color/accent"
+                android:text="保存配置"
+                android:textColor="@color/white" />
+        </LinearLayout>
+
+        <!-- 设备环境 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="设备环境"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Linux 运行时（内嵌 Termux bash，AI 执行 sh 命令的基础，约 30MB）"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/install_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="@color/accent"
+                android:text="安装 / 更新 Linux 运行时"
+                android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/install_node_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="测试与模型供应商的连接"
+                android:textColor="@color/text" />
+        </LinearLayout>
+
+        <!-- 功能 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="功能"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp">
+
+            <Button
+                android:id="@+id/start_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/accent"
+                android:text="进入对话"
+                android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/background_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="后台运行（忽略电池优化 + 1px 保活悬浮窗）"
+                android:textColor="@color/text" />
+
+            <Button
+                android:id="@+id/float_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="小窗模式（悬浮聊天）"
+                android:textColor="@color/text" />
+        </LinearLayout>
+
+        <!-- 日志 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="安装日志"
+            android:textColor="@color/muted"
+            android:textSize="12sp"
+            android:layout_marginTop="18dp" />
+
+        <TextView
+            android:id="@+id/log_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_code"
+            android:padding="10dp"
+            android:textColor="@color/muted"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:layout_marginTop="6dp" />
+    </LinearLayout>
+</ScrollView>

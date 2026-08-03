@@ -1,0 +1,11 @@
+{
+  "name": "webcode-local-agent",
+  "version": "1.0.0",
+  "description": "WebCode 本地 AI 编程助手 Agent（零依赖，运行于内嵌 Termux 运行时）",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "mock": "MOCK=1 node agent.js"
+  },
+  "license": "GPL-3.0"
+}
