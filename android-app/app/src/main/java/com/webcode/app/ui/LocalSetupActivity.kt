@@ -43,8 +43,8 @@ class LocalSetupActivity : AppCompatActivity() {
 
         val modeLabels = listOf("自动", "思考", "非思考")
         val modeValues = listOf("auto", "auto", "none")
-        val effortLabels = listOf("低", "中", "高")
-        val effortValues = listOf("low", "medium", "high")
+        val effortLabels = listOf("低", "中", "高", "最高")
+        val effortValues = listOf("low", "medium", "high", "max")
         reasoningMode.adapter = android.widget.ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item, modeLabels
         )

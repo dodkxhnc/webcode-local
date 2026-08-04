@@ -65,6 +65,8 @@ class MainActivity : AppCompatActivity(), ChatListener {
     private val pendingOps = mutableListOf<Pair<String, String>>()
     private var flushScheduled = false
     private var stickToBottom = true
+    private var multiSelect = false
+    private val selectedSessions = mutableSetOf<String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,10 +108,25 @@ class MainActivity : AppCompatActivity(), ChatListener {
             drawer.closeDrawer(GravityCompat.START)
             openSettings()
         }
-
-        findViewById<View>(R.id.suggestion_1).setOnClickListener { useSuggestion(0) }
-        findViewById<View>(R.id.suggestion_2).setOnClickListener { useSuggestion(1) }
-        findViewById<View>(R.id.suggestion_3).setOnClickListener { useSuggestion(2) }
+        findViewById<View>(R.id.drawer_multiselect).setOnClickListener {
+            if (multiSelect) {
+                // 多选模式下点按钮 = 删除选中
+                confirmDeleteSelected()
+            } else {
+                multiSelect = true
+                updateMultiSelectUi()
+                renderNavSessions()
+            }
+        }
+        findViewById<View>(R.id.drawer_multi_done).setOnClickListener {
+            multiSelect = false
+            selectedSessions.clear()
+            updateMultiSelectUi()
+            renderNavSessions()
+        }
+        findViewById<View>(R.id.drawer_partitions).setOnClickListener {
+            showPartitionManager()
+        }
 
         if (!com.webcode.app.local.LocalEngine.isConfigured(this)) {
             Toast.makeText(this, "尚未配置 API Key，请在设置页填写", Toast.LENGTH_LONG).show()
@@ -133,6 +150,8 @@ class MainActivity : AppCompatActivity(), ChatListener {
     override fun onResume() {
         super.onResume()
         loadInfo()
+        // 小窗可能新建/修改了会话，回来立即刷新列表
+        refreshSessionList()
     }
 
     override fun onStart() {
@@ -155,8 +174,8 @@ class MainActivity : AppCompatActivity(), ChatListener {
         val effort = findViewById<android.widget.Spinner>(R.id.quick_effort)
         val modeLabels = listOf("自动", "思考", "非思考")
         val modeValues = listOf("auto", "auto", "none")
-        val effortLabels = listOf("低", "中", "高")
-        val effortValues = listOf("low", "medium", "high")
+        val effortLabels = listOf("低", "中", "高", "最高")
+        val effortValues = listOf("low", "medium", "high", "max")
         mode.adapter = android.widget.ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item, modeLabels
         )
@@ -203,16 +222,6 @@ class MainActivity : AppCompatActivity(), ChatListener {
         )
     }
 
-    private fun useSuggestion(i: Int) {
-        val texts = listOf(
-            getString(R.string.suggest_1),
-            getString(R.string.suggest_2),
-            getString(R.string.suggest_3)
-        )
-        inputBox.setText(texts[i])
-        sendMessage()
-    }
-
     private fun loadInfo() {
         Thread {
             try {
@@ -257,13 +266,182 @@ class MainActivity : AppCompatActivity(), ChatListener {
         }.start()
     }
 
+    private fun updateMultiSelectUi() {
+        val btn = findViewById<TextView>(R.id.drawer_multiselect)
+        val done = findViewById<TextView>(R.id.drawer_multi_done)
+        if (multiSelect) {
+            btn.text = "删除选中(${selectedSessions.size})"
+            btn.setTextColor(getColor(R.color.error))
+            done.visibility = View.VISIBLE
+        } else {
+            btn.text = "多选"
+            btn.setTextColor(getColor(R.color.accent))
+            done.visibility = View.GONE
+        }
+    }
+
     private fun renderNavSessions() {
+        val rows = buildList {
+            val defaultSessions = sessions.filter { it.partition.isNullOrEmpty() }
+            val byPartition = sessions.filter { !it.partition.isNullOrEmpty() }
+                .groupBy { it.partition!! }
+            add(SessionListAdapter.HEADER to null as SessionMeta?)
+            addAll(defaultSessions.map { SessionListAdapter.ITEM to it })
+            for ((name, list) in byPartition.toSortedMap()) {
+                add(SessionListAdapter.HEADER to null as SessionMeta?)
+                addAll(list.map { SessionListAdapter.ITEM to it })
+            }
+        }
         if (sessionList.adapter == null) {
             sessionList.layoutManager = LinearLayoutManager(this)
-            sessionList.adapter = SessionListAdapter(sessions) { id -> selectSession(id) }
+            sessionList.adapter = SessionListAdapter(rows) { id -> selectSession(id) }.apply {
+                onLongPress = { meta -> sessionMenu(meta) }
+                onSelectionChanged = { n -> updateMultiSelectUi() }
+            }
         } else {
-            (sessionList.adapter as SessionListAdapter).update(sessions)
+            val a = sessionList.adapter as SessionListAdapter
+            a.update(rows)
+            a.multiSelect = multiSelect
+            a.selected = selectedSessions
+            a.onLongPress = { meta -> sessionMenu(meta) }
+            a.onSelectionChanged = { n -> updateMultiSelectUi() }
         }
+    }
+
+    private fun sessionMenu(meta: SessionMeta) {
+        val store = com.webcode.app.local.LocalStore(this)
+        val options = mutableListOf("重命名", "删除", "移动到分区", "移出分区（回默认）")
+        AlertDialog.Builder(this)
+            .setTitle(meta.title)
+            .setItems(options.toTypedArray()) { _, which ->
+                when (which) {
+                    0 -> {
+                        val input = EditText(this)
+                        input.setText(meta.title)
+                        AlertDialog.Builder(this)
+                            .setTitle("重命名")
+                            .setView(input)
+                            .setPositiveButton("确定") { _, _ ->
+                                val t = input.text.toString().trim()
+                                if (t.isNotEmpty()) {
+                                    Thread { engine.renameSession(meta.id, t) }.start()
+                                    refreshSessionList()
+                                }
+                            }
+                            .setNegativeButton("取消", null)
+                            .show()
+                    }
+                    1 -> {
+                        AlertDialog.Builder(this)
+                            .setMessage("删除会话「${meta.title}」？")
+                            .setPositiveButton("删除") { _, _ ->
+                                Thread {
+                                    engine.deleteSession(meta.id)
+                                    runOnUiThread {
+                                        refreshSessionList()
+                                        if (activeId == meta.id) newChat()
+                                    }
+                                }.start()
+                            }
+                            .setNegativeButton("取消", null)
+                            .show()
+                    }
+                    2 -> {
+                        val partitions = store.partitions()
+                        val opts = partitions.toMutableList().apply { add("＋ 新建分区") }
+                        AlertDialog.Builder(this)
+                            .setTitle("移动到分区")
+                            .setItems(opts.toTypedArray()) { _, w ->
+                                if (w < partitions.size) {
+                                    store.setPartition(meta.id, partitions[w])
+                                    refreshSessionList()
+                                } else {
+                                    val input = EditText(this)
+                                    input.hint = "分区名称"
+                                    AlertDialog.Builder(this)
+                                        .setTitle("新建分区")
+                                        .setView(input)
+                                        .setPositiveButton("确定") { _, _ ->
+                                            val name = input.text.toString().trim()
+                                            if (name.isNotEmpty()) {
+                                                store.setPartition(meta.id, name)
+                                                refreshSessionList()
+                                            }
+                                        }
+                                        .setNegativeButton("取消", null)
+                                        .show()
+                                }
+                            }
+                            .show()
+                    }
+                    3 -> {
+                        store.setPartition(meta.id, null)
+                        refreshSessionList()
+                    }
+                }
+            }
+            .show()
+    }
+
+    private fun confirmDeleteSelected() {
+        val n = selectedSessions.size
+        AlertDialog.Builder(this)
+            .setMessage("删除选中的 $n 个会话？（可跨分区）")
+            .setPositiveButton("删除") { _, _ ->
+                Thread {
+                    for (id in selectedSessions) {
+                        try {
+                            engine.deleteSession(id)
+                        } catch (e: Exception) {
+                        }
+                    }
+                    runOnUiThread {
+                        selectedSessions.clear()
+                        multiSelect = false
+                        updateMultiSelectUi()
+                        refreshSessionList()
+                    }
+                }.start()
+            }
+            .setNegativeButton("取消") { _, _ ->
+                selectedSessions.clear()
+                updateMultiSelectUi()
+                renderNavSessions()
+            }
+            .show()
+    }
+
+    private fun showPartitionManager() {
+        val store = com.webcode.app.local.LocalStore(this)
+        val partitions = store.partitions()
+        if (partitions.isEmpty()) {
+            Toast.makeText(this, "暂无分区", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = partitions.map { "$it（${store.list().count { s -> s.partition == it }} 会话）" }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("分区管理（${partitions.size}）")
+            .setItems(labels) { _, which ->
+                val name = partitions[which]
+                val count = store.list().count { it.partition == name }
+                AlertDialog.Builder(this)
+                    .setTitle("分区「$name」")
+                    .setItems(arrayOf("释放分区（$count 个会话移回默认）", "删除分区（连同 $count 个会话）")) { _, w ->
+                        when (w) {
+                            0 -> {
+                                store.releasePartition(name)
+                                refreshSessionList()
+                            }
+                            1 -> {
+                                store.deletePartition(name)
+                                refreshSessionList()
+                            }
+                        }
+                    }
+                    .show()
+            }
+            .setPositiveButton("关闭", null)
+            .show()
     }
 
     private fun selectSession(id: String) {
@@ -282,6 +460,7 @@ class MainActivity : AppCompatActivity(), ChatListener {
                         return@runOnUiThread
                     }
                     activeId = s.id
+                    com.webcode.app.local.LocalEngine.setLastSession(this, s.id)
                     messages.clear()
                     messages.addAll(s.messages)
                     adapter.submit()
@@ -384,6 +563,7 @@ class MainActivity : AppCompatActivity(), ChatListener {
                 val sid = data.optString("sessionId")
                 if (sid.isNotEmpty()) {
                     activeId = sid
+                    com.webcode.app.local.LocalEngine.setLastSession(this, sid)
                     refreshSessionList()
                 }
             }
@@ -619,94 +799,77 @@ class MainActivity : AppCompatActivity(), ChatListener {
     }
 
     class SessionListAdapter(
-        private var items: List<SessionMeta>,
+        private var rows: List<Pair<Int, SessionMeta?>>,
         private val onClick: (String) -> Unit
     ) : RecyclerView.Adapter<SessionListAdapter.VH>() {
 
-        fun update(list: List<SessionMeta>) {
-            items = list
+        companion object {
+            const val HEADER = 0
+            const val ITEM = 1
+        }
+
+        var multiSelect = false
+        var selected: MutableSet<String> = mutableSetOf()
+        var onLongPress: ((SessionMeta) -> Unit)? = null
+        var onSelectionChanged: ((Int) -> Unit)? = null
+
+        fun update(list: List<Pair<Int, SessionMeta?>>) {
+            rows = list
             notifyDataSetChanged()
         }
 
         inner class VH(view: View) : RecyclerView.ViewHolder(view) {
             val title: TextView = view.findViewById(R.id.session_title)
             val meta: TextView = view.findViewById(R.id.session_meta)
+            val check: android.widget.CheckBox = view.findViewById(R.id.session_check)
         }
+
+        override fun getItemCount(): Int = rows.size
+
+        override fun getItemViewType(position: Int): Int = rows[position].first
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH =
             VH(LayoutInflater.from(parent.context).inflate(R.layout.item_session, parent, false))
 
-        override fun getItemCount(): Int = items.size
-
         override fun onBindViewHolder(holder: VH, position: Int) {
-            val s = items[position]
-            holder.title.text = s.title
-            val usage = s.usage
-            val tokens = usage?.optLong("promptTokens")?.plus(usage.optLong("completionTokens")) ?: 0
-            holder.meta.text = "${s.id.take(8)} · $tokens tokens"
-            holder.itemView.setOnClickListener { onClick(s.id) }
-            holder.itemView.setOnLongClickListener {
-                showMenu(holder.itemView.context, s)
-                true
+            val (kind, s) = rows[position]
+            if (kind == HEADER) {
+                holder.title.text = s?.partition ?: "默认分区"
+                holder.title.setTextColor(holder.itemView.context.getColor(R.color.accent))
+                holder.title.textSize = 12f
+                holder.meta.text = ""
+                holder.check.visibility = View.GONE
+                holder.itemView.setOnClickListener(null)
+                holder.itemView.setOnLongClickListener(null)
+                return
             }
-        }
-
-        private fun showMenu(ctx: android.content.Context, meta: SessionMeta) {
-            val options = arrayOf("重命名", "删除")
-            AlertDialog.Builder(ctx)
-                .setTitle(meta.title)
-                .setItems(options) { _, which ->
-                    when (which) {
-                        0 -> rename(ctx, meta)
-                        1 -> delete(ctx, meta)
-                    }
+            val meta = s ?: return
+            holder.title.text = meta.title
+            holder.title.setTextColor(holder.itemView.context.getColor(R.color.text))
+            holder.title.textSize = 14f
+            val usage = meta.usage
+            val tokens = usage?.optLong("promptTokens")?.plus(usage.optLong("completionTokens")) ?: 0
+            if (multiSelect) {
+                holder.check.visibility = View.VISIBLE
+                holder.check.isChecked = selected.contains(meta.id)
+                holder.meta.text = "${meta.id.take(8)} · $tokens tokens"
+                val toggle = {
+                    if (selected.contains(meta.id)) selected.remove(meta.id) else selected.add(meta.id)
+                    notifyDataSetChanged()
+                    onSelectionChanged?.invoke(selected.size)
                 }
-                .show()
-        }
-
-        private fun rename(ctx: android.content.Context, meta: SessionMeta) {
-            val input = EditText(ctx)
-            input.setText(meta.title)
-            input.setSingleLine(true)
-            AlertDialog.Builder(ctx)
-                .setTitle("重命名会话")
-                .setView(input)
-                .setPositiveButton("确定") { _, _ ->
-                    val title = input.text.toString().trim()
-                    if (title.isNotEmpty()) {
-                        Thread {
-                            try {
-                            Engines.current(ctx).renameSession(meta.id, title)
-                            meta.title = title
-                            android.os.Handler(android.os.Looper.getMainLooper())
-                                .post { notifyDataSetChanged() }
-                            } catch (e: Exception) {
-                            }
-                        }.start()
-                    }
+                holder.check.setOnClickListener { toggle() }
+                holder.itemView.setOnClickListener { toggle() }
+                holder.itemView.setOnLongClickListener(null)
+            } else {
+                holder.check.visibility = View.GONE
+                holder.meta.text = "${meta.id.take(8)} · $tokens tokens"
+                holder.itemView.setOnClickListener { onClick(meta.id) }
+                holder.itemView.setOnLongClickListener {
+                    onLongPress?.invoke(meta)
+                    true
                 }
-                .setNegativeButton("取消", null)
-                .show()
-        }
-
-        private fun delete(ctx: android.content.Context, meta: SessionMeta) {
-            AlertDialog.Builder(ctx)
-                .setMessage("确定删除会话「${meta.title}」？")
-                .setPositiveButton("删除") { _, _ ->
-                    Thread {
-                        try {
-                            Engines.current(ctx).deleteSession(meta.id)
-                            android.os.Handler(android.os.Looper.getMainLooper())
-                                .post {
-                                    items = items.filterNot { it.id == meta.id }
-                                    notifyDataSetChanged()
-                                }
-                        } catch (e: Exception) {
-                        }
-                    }.start()
-                }
-                .setNegativeButton("取消", null)
-                .show()
+            }
         }
     }
 }

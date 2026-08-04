@@ -52,7 +52,8 @@ data class SessionMeta(
     var title: String,
     val createdAt: Long,
     val updatedAt: Long,
-    val usage: JSONObject?
+    val usage: JSONObject?,
+    var partition: String? = null
 )
 
 data class Usage(
@@ -143,7 +144,8 @@ fun parseSessionMeta(o: JSONObject): SessionMeta =
         title = o.optString("title"),
         createdAt = o.optLong("createdAt"),
         updatedAt = o.optLong("updatedAt"),
-        usage = o.optJSONObject("usage")
+        usage = o.optJSONObject("usage"),
+        partition = if (o.isNull("partition")) null else o.optString("partition")
     )
 
 fun parseSession(o: JSONObject): Session {

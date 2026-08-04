@@ -35,7 +35,8 @@ object MarkwonRenderer {
             val density = context.resources.displayMetrics.density
 
             val latexBuilder = JLatexMathPlugin.builder(13f * density, 15f * density)
-            latexBuilder.inlinesEnabled(true)
+            // 行内 $...$ 渲染会造成字体基线偏移，禁用；保留 $$...$$ 块级公式
+            latexBuilder.inlinesEnabled(false)
             latexBuilder.theme()
                 .textColor(text)
                 .inlineTextColor(codeFg)
@@ -103,8 +104,9 @@ object MarkwonRenderer {
         }
         textView.text = builder
         // 代码块的 ClickableSpan 会让 TextView 切换成 LinkMovementMethod 导致长按无法选取，
-        // 强制恢复 ArrowKeyMovementMethod（同时保留点击代码块复制与长按选择）
+        // 强制恢复 ArrowKeyMovementMethod + 程序化开启选取（同时保留点击代码块复制与长按选择）
         try {
+            textView.setTextIsSelectable(true)
             textView.movementMethod = ArrowKeyMovementMethod.getInstance()
         } catch (e: Exception) {
         }

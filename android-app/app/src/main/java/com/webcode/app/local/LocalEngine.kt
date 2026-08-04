@@ -56,6 +56,11 @@ class LocalEngine(context: Context) : ChatEngine {
     private val workspaceDir: File
         get() = File(appContext.filesDir, "workspace").apply { mkdirs() }
 
+    fun isRunning(): Boolean = running
+
+    fun runningSessionId(): String? =
+        if (running) currentSessionId else null
+
     private fun apiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
     private fun baseUrl(): String = prefs.getString(KEY_BASE_URL, DirectClient.DEFAULT_BASE_URL) ?: DirectClient.DEFAULT_BASE_URL
     private fun model(): String = prefs.getString(KEY_MODEL, DirectClient.DEFAULT_MODEL) ?: DirectClient.DEFAULT_MODEL
@@ -111,6 +116,20 @@ class LocalEngine(context: Context) : ChatEngine {
         return null
     }
 
+    /* ============ 悬浮窗会话辅助（与小窗共用存储） ============ */
+    fun floatCreate(title: String = "小窗对话"): com.webcode.app.api.SessionMeta = store.create(title)
+
+    fun floatSessions(): List<com.webcode.app.api.SessionMeta> = store.list()
+
+    fun floatGet(id: String): com.webcode.app.api.Session? = store.get(id)
+
+    fun floatItems(id: String): JSONArray = store.items(id)
+
+    fun floatSave(id: String, messages: List<com.webcode.app.api.SessionMessage>, items: JSONArray) {
+        store.saveMessages(id, messages)
+        store.saveItems(id, items)
+    }
+
     /* ============ 工具循环 ============ */
     override fun start(sessionId: String?, content: String, listener: EngineListener) {
         if (running) return
@@ -147,6 +166,8 @@ class LocalEngine(context: Context) : ChatEngine {
         currentAssistantId = assistantMsg.id
         currentMessages.add(userMsg)
         currentMessages.add(assistantMsg)
+        // 立即落盘：即使运行中被杀，会话里也保留用户消息（否则小窗/重进后看不到该会话）
+        store.saveMessages(sid, currentMessages)
         emit("user_message", JSONObject()
             .put("message", JSONObject().put("id", userMsg.id))
             .put("assistantMessageId", assistantMsg.id))
@@ -277,7 +298,9 @@ class LocalEngine(context: Context) : ChatEngine {
                     "web_search_call" -> {
                         hasWebSearch = true
                         items.put(item) // 原样回传，服务端自动恢复搜索结果
-                        emitToolCard("web_search", "web_search", "联网搜索")
+                        val wp = emitToolCard("web_search", "web_search", "联网搜索")
+                        wp.state = "completed"
+                        wp.output = "（服务端已获取搜索结果）"
                     }
                     "reasoning" -> {
                         // 思考内容必须原样回传（流式阶段已通过 reasoning_text.delta 展示过，这里只回传不重复显示）
@@ -337,9 +360,19 @@ class LocalEngine(context: Context) : ChatEngine {
                 if (abort.get()) break
                 val name = fc.optString("name")
                 val args = fc.optString("arguments")
-                emitToolCard(callId, name, "$name ${args.take(60)}")
+                val part = emitToolCard(callId, name, "$name ${args.take(60)}")
 
                 val output = executeTool(name, args, callId)
+                // 同步持久化部件状态：completed/error，否则落盘为 running → 重进显示"应用中断"
+                if (output.startsWith("工具执行失败") || output.startsWith("命令执行失败") ||
+                    output.startsWith("proot") || output.startsWith("rootfs")
+                ) {
+                    part.state = "error"
+                    part.output = output
+                } else {
+                    part.state = "completed"
+                    part.output = output
+                }
                 items.put(DirectClient.functionCallOutputItem(callId, output))
                 emit("tool_output", JSONObject()
                     .put("messageId", currentAssistantId)
@@ -361,26 +394,21 @@ class LocalEngine(context: Context) : ChatEngine {
         storeMessages(sid)
     }
 
-    /** 清洗会话历史 items：丢弃悬空的 function_call，空输出补占位 */
+    /**
+     * 清洗会话历史 items：只丢弃【末尾】悬空的 function_call（上次中断遗留，无对应输出）。
+     * 注意：不能丢弃中间的 function_call —— DeepSeek 默认并行调用，
+     * [fc1, fc2, out1, out2] 中的 fc2 是合法的，误删会导致
+     * "No tool call found for tool output" 400。
+     */
     private fun sanitizeItems(initial: JSONArray): JSONArray {
         val result = JSONArray()
-        var pendingCall = false
         for (i in 0 until initial.length()) {
-            val item = initial.optJSONObject(i) ?: continue
-            when (item.optString("type")) {
-                "function_call" -> {
-                    if (pendingCall) continue // 上一个悬空，丢弃
-                    pendingCall = true
-                    result.put(item)
-                }
-                "function_call_output" -> {
-                    if (item.optString("output").isEmpty()) {
-                        item.put("output", "（无输出）")
-                    }
-                    pendingCall = false
-                    result.put(item)
-                }
-                else -> result.put(item)
+            initial.optJSONObject(i)?.let { result.put(it) }
+        }
+        if (result.length() > 0) {
+            val last = result.optJSONObject(result.length() - 1)
+            if (last?.optString("type") == "function_call") {
+                result.remove(result.length() - 1)
             }
         }
         return result
@@ -557,7 +585,7 @@ class LocalEngine(context: Context) : ChatEngine {
         currentListener?.onEvent(type, data)
     }
 
-    private fun emitToolCard(partId: String, tool: String, title: String) {
+    private fun emitToolCard(partId: String, tool: String, title: String): Part.Tool {
         val part = Part.Tool(
             id = partId,
             tool = tool,
@@ -575,6 +603,7 @@ class LocalEngine(context: Context) : ChatEngine {
             .put("tool", tool)
             .put("title", title)
             .put("input", JSONObject()))
+        return part
     }
 
     private fun appendPart(part: Part) {
@@ -738,6 +767,14 @@ class LocalEngine(context: Context) : ChatEngine {
         )
 
     companion object {
+        @JvmStatic
+        fun getInstance(context: android.content.Context): LocalEngine? =
+            try {
+                Engines.current(context) as? LocalEngine
+            } catch (e: Exception) {
+                null
+            }
+
         const val PREFS = "webcode_direct"
         const val KEY_API_KEY = "api_key"
         const val KEY_BASE_URL = "base_url"
@@ -763,6 +800,17 @@ class LocalEngine(context: Context) : ChatEngine {
                 sp.getString(KEY_MODEL, DirectClient.DEFAULT_MODEL) ?: DirectClient.DEFAULT_MODEL
             )
         }
+
+        const val KEY_LAST_SESSION = "last_session"
+
+        fun setLastSession(context: Context, id: String?) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_LAST_SESSION, id).apply()
+        }
+
+        fun lastSession(context: Context): String? =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_LAST_SESSION, null)
 
         const val KEY_MOUNT_ENABLED = "mount_enabled"
         const val KEY_MOUNT_PATHS = "mount_paths"

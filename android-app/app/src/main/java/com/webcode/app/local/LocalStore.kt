@@ -41,13 +41,18 @@ class LocalStore(context: Context) {
             }
         }?.sortedByDescending { it.updatedAt } ?: emptyList()
 
-    private fun metaOf(doc: JSONObject): JSONObject =
-        JSONObject()
+    private fun metaOf(doc: JSONObject): JSONObject {
+        val meta = JSONObject()
             .put("id", doc.optString("id"))
             .put("title", doc.optString("title"))
             .put("createdAt", doc.optLong("createdAt"))
             .put("updatedAt", doc.optLong("updatedAt"))
             .put("usage", doc.optJSONObject("usage"))
+        if (doc.has("partition") && !doc.isNull("partition")) {
+            meta.put("partition", doc.optString("partition"))
+        }
+        return meta
+    }
 
     fun get(id: String): Session? = try {
         val doc = JSONObject(file(id).readText())
@@ -87,6 +92,36 @@ class LocalStore(context: Context) {
         JSONObject(file(id).readText()).optJSONArray("items") ?: JSONArray()
     } catch (e: Exception) {
         JSONArray()
+    }
+
+    fun setPartition(id: String, partition: String?) {
+        update(id) { doc ->
+            if (partition == null) {
+                doc.remove("partition")
+            } else {
+                doc.put("partition", partition)
+            }
+        }
+    }
+
+    fun partitions(): List<String> =
+        list()
+            .mapNotNull { it.partition }
+            .distinct()
+            .sorted()
+
+    /** 释放分区：其中会话移回默认（partition=null） */
+    fun releasePartition(name: String) {
+        for (s in list()) {
+            if (s.partition == name) setPartition(s.id, null)
+        }
+    }
+
+    /** 删除分区：连同其中会话一起删除 */
+    fun deletePartition(name: String) {
+        for (s in list()) {
+            if (s.partition == name) delete(s.id)
+        }
     }
 
     fun rename(id: String, title: String) {
