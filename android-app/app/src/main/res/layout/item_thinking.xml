@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/thinking_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_card"
+    android:layout_marginStart="14dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="14dp"
+    android:layout_marginBottom="4dp"
+    android:padding="10dp">
+
+    <TextView
+        android:id="@+id/thinking_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="44dp"
+        android:gravity="center_vertical"
+        android:text="@string/thinking"
+        android:textColor="@color/muted"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:drawableStart="@drawable/ic_chevron"
+        android:drawablePadding="8dp"
+        android:padding="12dp" />
+
+    <TextView
+        android:id="@+id/thinking_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/muted"
+        android:textSize="12.5sp"
+        android:visibility="gone"
+        android:textIsSelectable="true"
+        android:lineSpacingExtra="1dp" />
+</LinearLayout>

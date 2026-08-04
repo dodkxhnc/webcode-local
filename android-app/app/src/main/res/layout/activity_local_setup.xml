@@ -1,0 +1,454 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:id="@+id/title_version"
+                android:text="WebCode 本地模式"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="直连 DeepSeek · 内嵌 Termux"
+                android:textColor="@color/muted"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- 状态卡 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="10dp"
+            android:layout_marginTop="10dp">
+
+            <TextView
+                android:id="@+id/status_bootstrap"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/status_node"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                android:id="@+id/status_agent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="6dp" />
+
+            <TextView
+                android:id="@+id/status_battery"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="13sp"
+                android:layout_marginTop="6dp" />
+        </LinearLayout>
+
+        <!-- 连接模型 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="连接模型"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="接口地址"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/llm_base_url"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:hint="https://api.deepseek.com"
+                android:padding="10dp"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="模型名"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:layout_marginTop="8dp" />
+
+            <EditText
+                android:id="@+id/llm_model"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:hint="deepseek-v4-flash"
+                android:padding="10dp"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="API Key"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:layout_marginTop="8dp" />
+
+            <EditText
+                android:id="@+id/llm_api_key"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:hint="sk-..."
+                android:inputType="textPassword"
+                android:padding="10dp"
+                android:textColor="@color/text"
+                android:textSize="13sp"
+                android:layout_marginTop="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="思考模式"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:gravity="center_vertical" />
+
+                <Spinner
+                    android:id="@+id/reasoning_mode"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="思考强度"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp"
+                    android:gravity="center_vertical" />
+
+                <Spinner
+                    android:id="@+id/effort_spinner"
+                    android:layout_width="140dp"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/save_llm_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="@color/accent"
+                android:text="保存配置"
+                android:textColor="@color/white" />
+        </LinearLayout>
+
+        <!-- 设备环境 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="设备环境"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="10dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Ubuntu rootfs（完整 Linux 系统，AI 执行 sh/apt/python 的环境）"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/download_rootfs_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/accent"
+                android:text="下载 Ubuntu 26.04 LTS rootfs（官方版，约 35MB）"
+                android:textColor="@color/white" />
+
+            <LinearLayout
+                android:id="@+id/progress_wrap"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="10dp"
+                android:visibility="gone">
+
+                <ProgressBar
+                    android:id="@+id/download_progress"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="0dp"
+                    android:layout_height="10dp"
+                    android:layout_weight="1"
+                    android:progressTint="@color/accent" />
+
+                <TextView
+                    android:id="@+id/progress_text"
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:text="0%"
+                    android:textColor="@color/muted"
+                    android:textSize="11sp"
+                    android:gravity="end"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/rootfs_cb"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="使用 Ubuntu rootfs 执行命令（完整 Linux，无硬编码路径问题）"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <CheckBox
+                android:id="@+id/mount_cb"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="挂载外部路径（默认关闭，开启后 Ubuntu 根目录出现 /mnt/external）"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:id="@+id/mount_panel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/mount_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/muted"
+                    android:textSize="12sp"
+                    android:padding="8dp" />
+
+                <Button
+                    android:id="@+id/add_mount_btn"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:backgroundTint="@color/panel3"
+                    android:text="添加外部路径（默认：内部存储 /storage/emulated/0）"
+                    android:textColor="@color/text" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/import_rootfs_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="导入 Ubuntu rootfs（从本地 tar 包安装）"
+                android:textColor="@color/text" />
+
+            <Button
+                android:id="@+id/uninstall_rootfs_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="卸载 Ubuntu rootfs（删除整个系统）"
+                android:textColor="@color/error" />
+
+            <Button
+                android:id="@+id/proot_check_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="proot 自检（验证执行环境）"
+                android:textColor="@color/text" />
+
+            <Button
+                android:id="@+id/install_node_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="测试与模型供应商的连接"
+                android:textColor="@color/text" />
+        </LinearLayout>
+
+        <!-- MCP -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MCP 服务器"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="10dp">
+
+            <TextView
+                android:id="@+id/mcp_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:padding="4dp" />
+
+            <Button
+                android:id="@+id/add_mcp_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/panel3"
+                android:text="添加 MCP 服务器（stdio 或 HTTP）"
+                android:textColor="@color/text" />
+        </LinearLayout>
+
+        <!-- 功能 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="功能"
+            android:textColor="@color/text"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="10dp">
+
+            <CheckBox
+                android:id="@+id/auto_enter_cb"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="下次启动自动进入对话"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/start_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/accent"
+                android:text="进入对话"
+                android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/background_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="后台运行（忽略电池优化 + 1px 保活悬浮窗）"
+                android:textColor="@color/text" />
+
+            <Button
+                android:id="@+id/float_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="小窗模式（悬浮聊天）"
+                android:textColor="@color/text" />
+        </LinearLayout>
+
+        <!-- 日志 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="安装日志"
+            android:textColor="@color/muted"
+            android:textSize="12sp"
+            android:layout_marginTop="18dp" />
+
+        <TextView
+            android:id="@+id/log_view"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_code"
+            android:padding="10dp"
+            android:textColor="@color/muted"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:layout_marginTop="6dp" />
+    </LinearLayout>
+</ScrollView>
