@@ -51,4 +51,8 @@
     <string name="info">服务器信息</string>
     <string name="workspace_path">工作目录</string>
     <string name="loading">加载中…</string>
+    <string name="copy_text">Copy</string>
+    <string name="paste_text">Paste</string>
+    <string name="text_selection_more">More…</string>
+    <string name="kill_session">关闭会话</string>
 </resources>

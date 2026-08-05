@@ -6,17 +6,25 @@ plugins {
 android {
     namespace 'com.webcode.app'
     compileSdk 34
+    ndkVersion "26.1.10909125"
 
     defaultConfig {
         applicationId "com.webcode.app"
         minSdk 24
         targetSdk 34
-        versionCode 3
-        versionName "3.0"
+        versionCode 7
+        versionName "3.1"
     }
 
     buildFeatures {
         buildConfig = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -45,5 +53,6 @@ dependencies {
     implementation 'io.noties.markwon:core:4.6.2'
     implementation 'io.noties.markwon:ext-latex:4.6.2'
     implementation 'io.noties.markwon:inline-parser:4.6.2'
-    implementation 'io.noties.markwon:ext-tables:4.6.2'
+    // 表格：源码本地化（io/noties/markwon/ext/tables/），修复垂直偏移
+    implementation 'com.atlassian.commonmark:commonmark-ext-gfm-tables:0.13.0'
 }

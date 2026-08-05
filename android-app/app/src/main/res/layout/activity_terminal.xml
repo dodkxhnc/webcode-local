@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000">
+
+    <!-- 顶部：会话切换 -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#101010">
+
+        <LinearLayout
+            android:id="@+id/session_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="4dp" />
+    </HorizontalScrollView>
+
+    <!-- 输出区：termux TerminalView -->
+    <FrameLayout
+        android:id="@+id/term_frame"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#000000" />
+
+    <!-- 输入区（默认隐藏，快捷栏 ⌨ 按钮弹出/关闭） -->
+    <LinearLayout
+        android:id="@+id/term_input_row"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#101010"
+        android:padding="4dp"
+        android:visibility="gone">
+
+        <EditText
+            android:id="@+id/term_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:fontFamily="monospace"
+            android:hint="输入命令…"
+            android:imeOptions="actionGo"
+            android:inputType="text"
+            android:textColor="#E8E8E8"
+            android:textColorHint="#555555"
+            android:textSize="13sp"
+            android:typeface="monospace" />
+
+        <ImageButton
+            android:id="@+id/term_send"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_send"
+            android:contentDescription="发送" />
+    </LinearLayout>
+
+    <!-- 扩展键（Termux 同款，可横滑） -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#101010"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/term_keys"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingBottom="4dp">
+
+            <TextView
+                android:id="@+id/key_esc"
+                style="@style/TermKey"
+                android:text="ESC" />
+
+            <TextView
+                android:id="@+id/key_slash"
+                style="@style/TermKey"
+                android:text="/" />
+
+            <TextView
+                android:id="@+id/key_minus"
+                style="@style/TermKey"
+                android:text="-" />
+
+            <TextView
+                android:id="@+id/key_up"
+                style="@style/TermKey"
+                android:text="↑" />
+
+            <TextView
+                android:id="@+id/key_down"
+                style="@style/TermKey"
+                android:text="↓" />
+
+            <TextView
+                android:id="@+id/key_left"
+                style="@style/TermKey"
+                android:text="←" />
+
+            <TextView
+                android:id="@+id/key_right"
+                style="@style/TermKey"
+                android:text="→" />
+
+            <TextView
+                android:id="@+id/key_tab"
+                style="@style/TermKey"
+                android:text="TAB" />
+
+            <TextView
+                android:id="@+id/key_ctrl"
+                style="@style/TermKey"
+                android:text="CTRL" />
+
+            <TextView
+                android:id="@+id/key_alt"
+                style="@style/TermKey"
+                android:text="ALT" />
+
+            <TextView
+                android:id="@+id/key_pipe"
+                style="@style/TermKey"
+                android:text="|" />
+
+            <TextView
+                android:id="@+id/key_amp"
+                style="@style/TermKey"
+                android:text="&amp;" />
+
+            <TextView
+                android:id="@+id/key_tilde"
+                style="@style/TermKey"
+                android:text="~" />
+
+            <TextView
+                android:id="@+id/key_new"
+                style="@style/TermKey"
+                android:text="＋"
+                android:textColor="#000000"
+                android:background="#7c6cff" />
+
+            <TextView
+                android:id="@+id/key_input"
+                style="@style/TermKey"
+                android:text="⌨" />
+        </LinearLayout>
+    </HorizontalScrollView>
+</LinearLayout>

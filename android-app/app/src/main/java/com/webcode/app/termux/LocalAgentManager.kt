@@ -91,7 +91,8 @@ object LocalAgentManager {
         context: Context,
         command: String,
         cwd: File? = null,
-        timeoutMs: Long = 120_000
+        timeoutMs: Long = 120_000,
+        onProcess: ((Process) -> Unit)? = null
     ): String {
         TermuxRuntime.init(context)
         val useRootfs = com.webcode.app.local.LocalEngine.useRootfs(context)
@@ -104,7 +105,7 @@ object LocalAgentManager {
             if (!File(TermuxRuntime.binDir, "proot").exists()) {
                 return "proot 缺失（assets 安装失败），请重装 APK 或检查存储"
             }
-            return runInRootfs(context, command, cwd, timeoutMs)
+            return runInRootfs(context, command, cwd, timeoutMs, onProcess)
         }
         // 未开启 rootfs：提示开启
         return "请先在设置页勾选「使用 Ubuntu rootfs 执行命令」并安装 rootfs"
@@ -120,13 +121,19 @@ object LocalAgentManager {
         val hostTmp = java.io.File(TermuxRuntime.prefixDir, "tmp")
         hostTmp.mkdirs()
 
-        val args = mutableListOf(TermuxRuntime.binDir + "/proot", "-0", "-r", root.absolutePath)
+        val args = mutableListOf(
+            TermuxRuntime.binDir + "/proot",
+            "--link2symlink",  // Android 上 hard link 受限，dpkg 备份 status-old 用 link() 会 EACCES
+            "-0", "-r", root.absolutePath
+        )
         args.add("-b"); args.add("${workspace.absolutePath}:/workspace")
         args.add("-b"); args.add("${rootHome.absolutePath}:/root")
         args.add("-b"); args.add("${hostTmp.absolutePath}:/tmp")
+        args.add("-b"); args.add("${TermuxRuntime.ensureHostDpkgDir(context)}:/var/lib/dpkg")
         args.add("-b"); args.add("/proc:/proc")
         args.add("-b"); args.add("/dev:/dev")
         args.add("-b"); args.add("/sys:/sys")
+        TermuxRuntime.ensureDns()
         val mounts = com.webcode.app.local.LocalEngine.mountPaths(context)
         for ((idx, mp) in mounts.withIndex()) {
             val src = java.io.File(mp)
@@ -146,7 +153,7 @@ object LocalAgentManager {
         env["TERM"] = "xterm-256color"
         env["LANG"] = "en_US.UTF-8"
         env["PROOT_TMP_DIR"] = hostTmp.absolutePath
-        env["TMPDIR"] = hostTmp.absolutePath
+        env["TMPDIR"] = "/tmp"
         env["PROOT_LOADER"] = TermuxRuntime.prefixDir + "/libexec/proot/loader"
         env["PROOT_LOADER_32"] = TermuxRuntime.prefixDir + "/libexec/proot/loader32"
         env["LD_LIBRARY_PATH"] = TermuxRuntime.prefixDir + "/lib"
@@ -161,7 +168,8 @@ object LocalAgentManager {
         context: Context,
         command: String,
         cwd: java.io.File?,
-        timeoutMs: Long
+        timeoutMs: Long,
+        onProcess: ((Process) -> Unit)? = null
     ): String {
         val prootBin = java.io.File(TermuxRuntime.binDir, "proot")
         val root = java.io.File(TermuxRuntime.rootfsDir)
@@ -199,16 +207,23 @@ object LocalAgentManager {
 
         val hostTmp = java.io.File(TermuxRuntime.prefixDir, "tmp")
         hostTmp.mkdirs()
-        val args = mutableListOf(prootBin.absolutePath, "-0", "-r", root.absolutePath)
+        val args = mutableListOf(
+            prootBin.absolutePath,
+            "--link2symlink",  // Android 上 hard link 受限，dpkg 备份 status-old 用 link() 会 EACCES
+            "-0", "-r", root.absolutePath
+        )
         // 工作区绑定到 /workspace，HOME 绑定到 /root，宿主 tmp 绑定到 /tmp
         args.add("-b"); args.add("${workspace.absolutePath}:/workspace")
         args.add("-b"); args.add("${rootHome.absolutePath}:/root")
         args.add("-b"); args.add("${hostTmp.absolutePath}:/tmp")
+        args.add("-b"); args.add("${TermuxRuntime.ensureHostDpkgDir(context)}:/var/lib/dpkg")
         // 关键：绑定宿主 /proc /dev /sys —— rootfs 没有 /proc，
         // rust-coreutils 等需要读 /proc/self/auxv，缺失会 panic（proot 虚拟 /proc 不提供 auxv）
         args.add("-b"); args.add("/proc:/proc")
         args.add("-b"); args.add("/dev:/dev")
         args.add("-b"); args.add("/sys:/sys")
+        // DNS：Android 宿主无 resolv.conf，改为直接写入 rootfs（见 TermuxRuntime.ensureDns）
+        TermuxRuntime.ensureDns()
         // 外部路径挂载：开启后在 /mnt/external（及 /mnt/external-N）可见
         val mounts = com.webcode.app.local.LocalEngine.mountPaths(context)
         for ((idx, mp) in mounts.withIndex()) {
@@ -231,7 +246,7 @@ object LocalAgentManager {
         // proot 进程自身的临时目录用宿主路径（安卓宿主无 /tmp）。
         // 关键：proot 源码只认 PROOT_TMP_DIR（不认 TMPDIR），不设则默认 P_tmpdir=/tmp 导致解压 loader 失败
         env["PROOT_TMP_DIR"] = hostTmp.absolutePath
-        env["TMPDIR"] = hostTmp.absolutePath
+        env["TMPDIR"] = "/tmp"
         // 指向预置的静态 loader，避免运行时解压（彻底规避 noexec 临时目录问题）
         env["PROOT_LOADER"] = TermuxRuntime.prefixDir + "/libexec/proot/loader"
         env["PROOT_LOADER_32"] = TermuxRuntime.prefixDir + "/libexec/proot/loader32"
@@ -243,11 +258,40 @@ object LocalAgentManager {
             val pb = ProcessBuilder(args)
             pb.environment().putAll(env)
             val p = pb.redirectErrorStream(true).start()
-            val out = p.inputStream.readBytes().toString(Charsets.UTF_8)
-            if (!p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
-                p.destroyForcibly()
+            // 关键修复：readBytes() 会无限阻塞直到进程退出（长命令/apt update 时工具永久卡住），
+            // 超时销毁代码在它后面根本执行不到 → AI 调用工具后"不回了"。
+            // 改为：独立线程读输出 + waitFor 超时强杀。
+            val outBuf = StringBuilder()
+            val readerThread = Thread {
+                try {
+                    p.inputStream.bufferedReader().use { r ->
+                        val buf = CharArray(8192)
+                        while (true) {
+                            val n = r.read(buf)
+                            if (n < 0) break
+                            outBuf.append(buf, 0, n)
+                            if (outBuf.length > 5_000_000) {
+                                outBuf.append("\n…(输出过长已截断)")
+                                break
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                }
             }
-            if (p.exitValue() != 0 && out.isBlank()) {
+            readerThread.start()
+            onProcess?.invoke(p)
+            val finished = p.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            if (!finished) {
+                p.destroyForcibly()
+                readerThread.join(3000)
+            }
+            readerThread.join(3000)
+            p.inputStream.close()
+            val out = outBuf.toString()
+            if (!finished) {
+                "命令超时（> ${timeoutMs / 1000}s）已强制终止，输出：\n" + out.takeLast(4000)
+            } else if (p.exitValue() != 0 && out.isBlank()) {
                 "proot 退出码 ${p.exitValue()}（无输出，可能被系统限制 ptrace）"
             } else {
                 out

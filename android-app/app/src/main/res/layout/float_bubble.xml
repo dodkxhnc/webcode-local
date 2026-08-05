@@ -6,12 +6,10 @@
     android:background="@drawable/bg_accent_round"
     android:elevation="4dp">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+    <ImageView
+        android:layout_width="16dp"
+        android:layout_height="16dp"
         android:layout_gravity="center"
-        android:text="W"
-        android:textColor="@color/white"
-        android:textSize="10sp"
-        android:textStyle="bold" />
+        android:src="@drawable/ic_github"
+        android:contentDescription="WebCode" />
 </FrameLayout>

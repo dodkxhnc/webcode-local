@@ -28,7 +28,7 @@ class LocalStore(context: Context) {
             .put("updatedAt", now)
             .put("items", JSONArray())
             .put("messages", JSONArray())
-        file(id).writeText(doc.toString(2))
+        atomicWrite(file(id), doc.toString(2))
         return parseSessionMeta(metaOf(doc))
     }
 
@@ -137,8 +137,21 @@ class LocalStore(context: Context) {
             val doc = JSONObject(file(id).readText())
             fn(doc)
             doc.put("updatedAt", System.currentTimeMillis())
-            file(id).writeText(doc.toString(2))
+            atomicWrite(file(id), doc.toString(2))
         } catch (e: Exception) {
+        }
+    }
+
+    /**
+     * 原子写：先写临时文件再 rename，避免读取方（历史列表/全屏刷新）读到写了一半的 JSON
+     * 导致解析失败、会话偶尔"消失"。
+     */
+    private fun atomicWrite(f: File, content: String) {
+        val tmp = File(f.parentFile, f.name + ".tmp")
+        tmp.writeText(content)
+        if (!tmp.renameTo(f)) {
+            tmp.copyTo(f, overwrite = true)
+            tmp.delete()
         }
     }
 

@@ -35,6 +35,7 @@ import com.webcode.app.api.parseQuestion
 import com.webcode.app.local.ChatEngine
 import com.webcode.app.local.EngineListener
 import com.webcode.app.local.Engines
+import com.webcode.app.BuildConfig
 import org.json.JSONObject
 
 class MainActivity : AppCompatActivity(), ChatListener {
@@ -67,6 +68,13 @@ class MainActivity : AppCompatActivity(), ChatListener {
     private var stickToBottom = true
     private var multiSelect = false
     private val selectedSessions = mutableSetOf<String>()
+
+    // 小窗等后台服务修改会话后广播刷新（overlay 不触发 onResume）
+    private val sessionChangedReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            refreshSessionList()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -134,6 +142,47 @@ class MainActivity : AppCompatActivity(), ChatListener {
 
         loadSessions()
         loadInfo()
+        // 恢复上次会话：退出重进后直接回到原对话（持久任务友好），没有则保持新对话页
+        val last = com.webcode.app.local.LocalEngine.lastSession(this)
+        if (!last.isNullOrEmpty()) {
+            selectSession(last)
+        }
+        // 小窗服务会话变更广播
+        try {
+            registerReceiver(
+                sessionChangedReceiver,
+                android.content.IntentFilter("webcode.sessions_changed"),
+                android.content.Context.RECEIVER_NOT_EXPORTED
+            )
+        } catch (e: Exception) {
+        }
+        // 版本更新检查（后台拉取仓库 version.json）
+        checkForUpdate()
+    }
+
+    private fun checkForUpdate() {
+        com.webcode.app.local.UpdateChecker.checkLatest { info ->
+            runOnUiThread {
+                try {
+                    if (info == null || info.versionCode <= BuildConfig.VERSION_CODE) return@runOnUiThread
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("发现新版本 ${info.versionName}")
+                        .setMessage(info.notes.ifEmpty { "有新版本可用，是否下载更新？" })
+                        .setPositiveButton("下载更新") { _, _ -> downloadUpdate(info.apkUrl) }
+                        .setNegativeButton("忽略", null)
+                        .show()
+                } catch (e: Exception) {
+                }
+            }
+        }
+    }
+
+    private fun downloadUpdate(url: String) {
+        if (url.isBlank()) {
+            android.widget.Toast.makeText(this, "缺少下载地址", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        com.webcode.app.local.UpdateChecker.downloadWithDialog(this, url)
     }
 
     override fun onStop() {
@@ -144,6 +193,10 @@ class MainActivity : AppCompatActivity(), ChatListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(sessionChangedReceiver)
+        } catch (e: Exception) {
+        }
         mainHandler.removeCallbacksAndMessages(null)
     }
 
@@ -576,6 +629,7 @@ class MainActivity : AppCompatActivity(), ChatListener {
                             adapter.replaceIds(lu, serverUserId, la, serverAssistantId)
                         }
                     }
+                    lastMsgId = serverAssistantId
                     localUserId = null
                     localAssistantId = null
                 }

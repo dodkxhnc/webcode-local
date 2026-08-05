@@ -1,7 +1,10 @@
 package com.webcode.app.ui
 
 import android.content.Context
+import android.view.ActionMode
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -66,27 +69,35 @@ class ChatAdapter(
     }
 
     fun appendDelta(messageId: String, text: String) {
+        // id 失配时兜底到最后一个 assistant 消息：防止 user_message 替换时序问题导致
+        // "AI 实际在输出但界面不显示"
         val m = messages.find { it.id == messageId }
-        if (m != null) {
-            val last = m.parts.lastOrNull()
-            if (last is Part.Text) {
-                last.text += text
-            } else {
-                m.parts.add(Part.Text(text))
-            }
+            ?: messages.lastOrNull { it.role == "assistant" }
+            ?: return
+        if (m.id != messageId) {
+            m.id = messageId
+        }
+        val last = m.parts.lastOrNull()
+        if (last is Part.Text) {
+            last.text += text
+        } else {
+            m.parts.add(Part.Text(text))
         }
         rebuild()
     }
 
     fun appendThinkingDelta(messageId: String, text: String) {
         val m = messages.find { it.id == messageId }
-        if (m != null) {
-            val last = m.parts.lastOrNull()
-            if (last is Part.Thinking) {
-                last.text += text
-            } else {
-                m.parts.add(Part.Thinking(text))
-            }
+            ?: messages.lastOrNull { it.role == "assistant" }
+            ?: return
+        if (m.id != messageId) {
+            m.id = messageId
+        }
+        val last = m.parts.lastOrNull()
+        if (last is Part.Thinking) {
+            last.text += text
+        } else {
+            m.parts.add(Part.Thinking(text))
         }
         rebuild()
     }
@@ -184,12 +195,74 @@ class ChatAdapter(
                         (m.parts.firstOrNull() as? Part.Text)?.text ?: ""
                 } else {
                     val p = m.parts[row.partIndex] as Part.Text
-                    MarkwonRenderer.setMarkdown(
-                        holder.itemView.findViewById(R.id.assistant_text),
-                        p.text
-                    )
+                    val tv = holder.itemView.findViewById<TextView>(R.id.assistant_text)
+                    MarkwonRenderer.setMarkdown(tv, p.text)
+                    setupCopyMenu(holder.itemView, tv, p.text)
                 }
             }
+        }
+    }
+
+    /** 长按选词后的 ActionMode 菜单 + item 长按兜底菜单：复制全文 / 复制代码块 / 复制原文 */
+    private fun setupCopyMenu(itemView: View, tv: TextView, markdown: String) {
+        val plain = tv.text?.toString() ?: markdown
+        val codes = MarkwonRenderer.extractCodeBlocks(markdown)
+        val copy: (String) -> Unit = { text ->
+            val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("text", text))
+            android.widget.Toast.makeText(ctx, "已复制", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        tv.customSelectionActionModeCallback = object : android.view.ActionMode.Callback {
+            override fun onCreateActionMode(mode: android.view.ActionMode?, menu: Menu?): Boolean {
+                // 自定义 callback 会替换系统默认菜单，这里手动补回"复制选中"
+                menu?.add("复制选中")?.setOnMenuItemClickListener {
+                    val s = tv.selectionStart
+                    val e = tv.selectionEnd
+                    if (s >= 0 && e > s && s < tv.text.length) {
+                        copy(tv.text.substring(s, e))
+                    } else {
+                        copy(plain)
+                    }
+                    true
+                }
+                menu?.add("复制全文")?.setOnMenuItemClickListener {
+                    copy(plain); true
+                }
+                if (codes.isNotEmpty()) {
+                    menu?.add("复制代码块")?.setOnMenuItemClickListener {
+                        copy(codes.joinToString("\n\n")); true
+                    }
+                }
+                menu?.add("复制Markdown原文")?.setOnMenuItemClickListener {
+                    copy(markdown); true
+                }
+                return true
+            }
+
+            override fun onPrepareActionMode(mode: android.view.ActionMode?, menu: Menu?) = false
+
+            override fun onActionItemClicked(mode: android.view.ActionMode?, item: MenuItem?) = false
+
+            override fun onDestroyActionMode(mode: android.view.ActionMode?) {}
+        }
+        // item 空白处长按兜底（TextView 自身长按优先进入选词，互不冲突）
+        itemView.setOnLongClickListener {
+            val items = buildList {
+                add("复制全文")
+                if (codes.isNotEmpty()) add("复制代码块")
+                add("复制Markdown原文")
+            }
+            android.app.AlertDialog.Builder(ctx)
+                .setTitle("消息操作")
+                .setItems(items.toTypedArray()) { _, which ->
+                    when (items[which]) {
+                        "复制全文" -> copy(plain)
+                        "复制代码块" -> copy(codes.joinToString("\n\n"))
+                        else -> copy(markdown)
+                    }
+                }
+                .show()
+            true
         }
     }
 

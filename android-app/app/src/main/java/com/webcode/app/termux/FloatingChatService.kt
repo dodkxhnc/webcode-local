@@ -16,6 +16,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -26,6 +27,7 @@ import com.webcode.app.api.Part
 import com.webcode.app.api.SessionMessage
 import com.webcode.app.local.DirectClient
 import com.webcode.app.local.LocalEngine
+import com.webcode.app.local.LocalStore
 import com.webcode.app.ui.ChatAdapter
 import com.webcode.app.ui.ChatListener
 import org.json.JSONArray
@@ -50,6 +52,83 @@ class FloatingChatService : Service(), ChatListener {
     private var adapter: ChatAdapter? = null
     private var titleText: TextView? = null
     private var inputBox: EditText? = null
+    private var floatSendBtn: android.widget.ImageButton? = null
+    private var panelContent: View? = null
+    @Volatile
+    private var runningProc: Process? = null
+
+    /* ============ AI 状态 → 悬浮球状态色 ============ */
+    private val AI_IDLE = 0
+    private val AI_THINKING = 1
+    private val AI_OUTPUT = 2
+    private val AI_BUSY = 3
+
+    @Volatile
+    private var aiState = AI_IDLE
+    private var blinkRunnable: Runnable? = null
+    private var blinkGreen = false
+
+    private fun setAiState(state: Int) {
+        aiState = state
+        handler.post { updateBubbleColor() }
+    }
+
+    private fun updateBubbleColor() {
+        val root = bubbleView?.findViewById<View>(R.id.bubble_root) ?: return
+        val bg = root.background
+        when (aiState) {
+            AI_THINKING -> bg.setTint(0xFFFF9800.toInt()) // 思考：橙色
+            AI_OUTPUT -> bg.setTint(0xFF2196F3.toInt())   // 输出：蓝色
+            AI_BUSY -> startBlinkGreen(root, bg)          // 工具执行：绿色闪烁
+            else -> bg.setTint(0xFF7C6CFF.toInt())        // 空闲：默认紫
+        }
+    }
+
+    private fun startBlinkGreen(root: View, bg: android.graphics.drawable.Drawable) {
+        stopBlink()
+        blinkGreen = false
+        blinkRunnable = object : Runnable {
+            override fun run() {
+                if (aiState != AI_BUSY) {
+                    stopBlink()
+                    updateBubbleColor()
+                    return
+                }
+                blinkGreen = !blinkGreen
+                bg.setTint(if (blinkGreen) 0xFF4CAF50.toInt() else 0xFF2E7D32.toInt())
+                handler.postDelayed(this, 500)
+            }
+        }
+        handler.postDelayed(blinkRunnable!!, 0)
+    }
+
+    private fun stopBlink() {
+        blinkRunnable?.let { handler.removeCallbacks(it) }
+        blinkRunnable = null
+    }
+
+    /** 中断：停止对话循环并立即终止正在执行的命令 */
+    private fun interrupt() {
+        abort.set(true)
+        running = false
+        try {
+            runningProc?.destroyForcibly()
+        } catch (e: Exception) {
+        }
+        updateSendButton()
+        adapter?.statusText = "已停止"
+        adapter?.submit()
+    }
+
+    /** 发送/中断按钮状态切换 */
+    private fun updateSendButton() {
+        try {
+            floatSendBtn?.setImageResource(
+                if (running) R.drawable.ic_stop else R.drawable.ic_send
+            )
+        } catch (e: Exception) {
+        }
+    }
 
     private var lastX = 0f
     private var lastY = 0f
@@ -65,14 +144,29 @@ class FloatingChatService : Service(), ChatListener {
 
     override fun onCreate() {
         super.onCreate()
+        // 前台服务 + 通知：保活（否则后台一段时间悬浮窗服务会被系统杀掉）
+        try {
+            startForeground(FLOAT_NOTIF_ID, buildKeepAliveNotification())
+        } catch (e: Exception) {
+        }
+        // Termux 同款三件套保活：悬浮窗 + 前台通知 + 电池优化豁免
+        try {
+            BgService.requestBattery(this)
+        } catch (e: Exception) {
+        }
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return
         }
         showBubble()
-        // 继承全屏对话：优先加载最近使用的会话（全屏正在用的除外）
-        val last = LocalEngine.lastSession(this)
+        // 小窗自己的会话记忆优先（重启后恢复小窗上次使用的会话），否则继承全屏最近会话
         val engine = LocalEngine.getInstance(appContext())
+        val floatLast = getSharedPreferences("float", MODE_PRIVATE).getString("last_session", null)
+        if (floatLast != null && engine?.floatGet(floatLast) != null) {
+            loadSession(floatLast)
+            return
+        }
+        val last = LocalEngine.lastSession(this)
         if (last != null && engine?.floatGet(last) != null &&
             last != engine.runningSessionId()
         ) {
@@ -84,6 +178,7 @@ class FloatingChatService : Service(), ChatListener {
 
     override fun onDestroy() {
         abort.set(true)
+        stopBlink()
         removeBubble()
         removePanel()
         super.onDestroy()
@@ -189,7 +284,7 @@ class FloatingChatService : Service(), ChatListener {
             val params = WindowManager.LayoutParams(
                 w, h,
                 overlayType(),
-                0, // 可聚焦：允许输入框获取焦点召唤键盘
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, // 面板外点击穿透到下层，不挡后面的界面
                 PixelFormat.TRANSLUCENT
             )
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
@@ -203,6 +298,16 @@ class FloatingChatService : Service(), ChatListener {
             if (px < 0) px = bx + 60
             params.x = px.coerceIn(0, (screenW - w - 8).coerceAtLeast(0))
             params.y = by.coerceIn(0, (screenH - h - 8).coerceAtLeast(0))
+
+            // 内容面板固定 280x400（全屏透明层方案已弃用：改为固定窗口 + NOT_TOUCH_MODAL 穿透）
+            val content = view.findViewById<View>(R.id.float_panel_content)
+            val cl = content.layoutParams as FrameLayout.LayoutParams
+            cl.width = w
+            cl.height = h
+            cl.marginStart = 0
+            cl.topMargin = 0
+            content.layoutParams = cl
+            panelContent = content
 
             chatList = view.findViewById(R.id.float_chat_list)
             titleText = view.findViewById(R.id.float_title)
@@ -224,13 +329,59 @@ class FloatingChatService : Service(), ChatListener {
                 menuOverlay.visibility = View.GONE
                 showHistoryInPanel()
             }
+            // 思考设置：一个按钮 → PopupMenu 选择（思考开/关 + 强度 自动/低/中/高/最高）
+            val thinkingView = view.findViewById<TextView>(R.id.float_opt_thinking)
+            fun refreshThinkingLabel() {
+                val cur = LocalEngine.reasoningSetting(this)
+                val on = if (cur == "none") "关" else "开"
+                val effort = when (cur) {
+                    "none" -> "关闭"
+                    "low" -> "低"
+                    "medium" -> "中"
+                    "high" -> "高"
+                    "max" -> "最高"
+                    else -> "自动"
+                }
+                thinkingView.text = "🧠 思考设置：$on · $effort"
+            }
+            refreshThinkingLabel()
+            thinkingView.setOnClickListener {
+                val cur = LocalEngine.reasoningSetting(this)
+                val popup = android.widget.PopupMenu(this, thinkingView)
+                fun add(label: String, value: String) {
+                    val item = popup.menu.add(label)
+                    if (value == cur) item.isChecked = true
+                    popup.menu.setGroupCheckable(0, true, false)
+                    item.setOnMenuItemClickListener {
+                        LocalEngine.setReasoning(this, value)
+                        refreshThinkingLabel()
+                        true
+                    }
+                }
+                add("思考：开启", "auto")
+                add("思考：关闭", "none")
+                popup.menu.add("——— 强度 ———").setEnabled(false)
+                add("强度：自动", "auto")
+                add("强度：低", "low")
+                add("强度：中", "medium")
+                add("强度：高", "high")
+                add("强度：最高", "max")
+                popup.show()
+            }
             menuOverlay.setOnClickListener { menuOverlay.visibility = View.GONE }
 
+            val floatSendBtn = view.findViewById<android.widget.ImageButton>(R.id.float_send)
+            this.floatSendBtn = floatSendBtn
             view.findViewById<View>(R.id.float_send).setOnClickListener {
-                val text = inputBox?.text.toString().trim()
-                if (text.isNotEmpty() && !running) {
-                    inputBox?.setText("")
-                    sendToModel(text)
+                if (running) {
+                    // 运行中点击 = 中断（立即停止循环 + 终止命令）
+                    interrupt()
+                } else {
+                    val text = inputBox?.text.toString().trim()
+                    if (text.isNotEmpty()) {
+                        inputBox?.setText("")
+                        sendToModel(text)
+                    }
                 }
             }
 
@@ -323,6 +474,7 @@ class FloatingChatService : Service(), ChatListener {
             return
         }
         sessionId = id
+        getSharedPreferences("float", MODE_PRIVATE).edit().putString("last_session", id).apply()
         items = engine.floatItems(id)
         messages.clear()
         messages.addAll(engine.floatGet(id)?.messages ?: emptyList())
@@ -333,7 +485,16 @@ class FloatingChatService : Service(), ChatListener {
     private fun renderLog() {
         adapter?.submit()
         adapter?.statusText = null
-        titleText?.text = "小窗 · " + (LocalEngine.getInstance(appContext())?.floatGet(sessionId ?: "")?.title ?: "对话")
+        try {
+            val engine = LocalEngine.getInstance(appContext())
+            val meta = engine?.floatGet(sessionId ?: "")
+            val usage = meta?.usage
+            val tokens = (usage?.optLong("promptTokens") ?: 0L) + (usage?.optLong("completionTokens") ?: 0L)
+            titleText?.text = "小窗 · ${meta?.title ?: "对话"}" +
+                if (tokens > 0) " ($tokens tokens)" else ""
+        } catch (e: Exception) {
+            titleText?.text = "小窗 · " + (LocalEngine.getInstance(appContext())?.floatGet(sessionId ?: "")?.title ?: "对话")
+        }
         scrollToBottom()
     }
 
@@ -469,8 +630,31 @@ class FloatingChatService : Service(), ChatListener {
     }
 
     private fun save() {
+        // 通过 handler 入队保存：保证在排队的流式渲染之后执行，避免尾部内容丢失
+        handler.post {
+            val engine = LocalEngine.getInstance(appContext()) ?: return@post
+            val sid = sessionId ?: return@post
+            try {
+                engine.floatSave(sid, messages, items)
+                // 通知全屏界面刷新会话列表（overlay 不会触发 MainActivity.onResume）
+                try {
+                    sendBroadcast(android.content.Intent("webcode.sessions_changed").setPackage(packageName))
+                } catch (e: Exception) {
+                }
+            } catch (e: Exception) {
+                DiagLog.log(this, "Float", "保存失败: ${e.message}")
+            }
+        }
+    }
+
+    /** 首次消息时设置会话标题（与全屏一致），并立即落盘 */
+    private fun ensureRecorded(text: String) {
         val engine = LocalEngine.getInstance(appContext()) ?: return
         val sid = sessionId ?: return
+        val meta = engine.floatSessions().find { it.id == sid }
+        if (meta != null && (meta.title.isEmpty() || meta.title == "小窗对话")) {
+            engine.renameSession(sid, text.take(24))
+        }
         try {
             engine.floatSave(sid, messages, items)
         } catch (e: Exception) {
@@ -487,6 +671,8 @@ class FloatingChatService : Service(), ChatListener {
         if (sessionId == null) newSession()
         running = true
         abort.set(false)
+        updateSendButton()
+        setAiState(AI_THINKING)
 
         val userMsg = SessionMessage(
             id = "f_" + System.currentTimeMillis(),
@@ -507,6 +693,8 @@ class FloatingChatService : Service(), ChatListener {
         adapter?.statusText = "思考中…"
         adapter?.submit()
         scrollToBottom()
+        // 立即落盘（标题 + 用户消息），防止中途退出丢失
+        ensureRecorded(text)
 
         Thread {
             try {
@@ -520,6 +708,7 @@ class FloatingChatService : Service(), ChatListener {
                             "response.output_text.delta" -> {
                                 val t = ev.data.optString("delta")
                                 if (t.isNotEmpty()) {
+                                    setAiState(AI_OUTPUT)
                                     handler.post {
                                         adapter?.appendDelta(aiMsg.id, t)
                                         scrollToBottom()
@@ -529,6 +718,7 @@ class FloatingChatService : Service(), ChatListener {
                             "response.reasoning_text.delta" -> {
                                 val t = ev.data.optString("delta")
                                 if (t.isNotEmpty()) {
+                                    setAiState(AI_THINKING)
                                     handler.post {
                                         adapter?.appendThinkingDelta(aiMsg.id, t)
                                         scrollToBottom()
@@ -559,12 +749,15 @@ class FloatingChatService : Service(), ChatListener {
                 if (abort.get()) {
                     handler.post { adapter?.statusText = null; adapter?.submit() }
                     running = false
+                    setAiState(AI_IDLE)
+                    updateSendButton()
                     save()
                     return@Thread
                 }
 
                 if (result.completed && result.response != null) {
                     val resp = result.response!!
+                    saveUsage(resp)
                     val output = resp.optJSONArray("output")
                     val calls = mutableListOf<Pair<JSONObject, String>>()
                     var finalText = ""
@@ -591,6 +784,7 @@ class FloatingChatService : Service(), ChatListener {
                     }
 
                     if (calls.isNotEmpty()) {
+                        setAiState(AI_BUSY)
                         for ((call, callId) in calls) {
                             if (abort.get()) break
                             val name = call.optString("name")
@@ -615,6 +809,7 @@ class FloatingChatService : Service(), ChatListener {
                 handler.post { adapter?.statusText = "异常：${e.message ?: e.javaClass.simpleName}"; adapter?.submit() }
             } finally {
                 running = false
+                setAiState(AI_IDLE)
                 save()
                 handler.post {
                     adapter?.statusText = null
@@ -626,43 +821,97 @@ class FloatingChatService : Service(), ChatListener {
     }
 
     private fun continueConversation(aiMsg: SessionMessage) {
-        if (abort.get() || running) return
+        // 完整多轮工具循环：每次 create 后解析 output，
+        // 有 function_call 就执行并继续下一轮，直到模型给出最终文本或 abort。
+        // 注意：此方法在主循环线程内串行调用（running 仍为 true），只检查 abort。
+        if (abort.get()) return
         Thread {
             try {
-                val (key, baseUrl, model) = LocalEngine.loadConfig(this)
-                val client = DirectClient(key, baseUrl, model)
-                val buf = StringBuilder()
-                val listener = object : DirectClient.Listener {
-                    override fun onEvent(ev: DirectClient.ResponseEvent) {
-                        if (ev.type == "response.output_text.delta") {
-                            val t = ev.data.optString("delta")
-                            if (t.isNotEmpty()) {
-                                handler.post {
-                                    adapter?.appendDelta(aiMsg.id, t)
-                                    scrollToBottom()
+                while (!abort.get()) {
+                    val (key, baseUrl, model) = LocalEngine.loadConfig(this)
+                    val client = DirectClient(key, baseUrl, model)
+                    val listener = object : DirectClient.Listener {
+                        override fun onEvent(ev: DirectClient.ResponseEvent) {
+                            if (ev.type == "response.output_text.delta") {
+                                val t = ev.data.optString("delta")
+                                if (t.isNotEmpty()) {
+                                    handler.post {
+                                        adapter?.appendDelta(aiMsg.id, t)
+                                        scrollToBottom()
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun onError(message: String) {
+                            handler.post { adapter?.statusText = "错误：$message"; adapter?.submit() }
+                        }
+                    }
+                    val result = client.create(
+                        items, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, listener, abort,
+                        LocalEngine.reasoningSetting(this).takeIf { it != "auto" }
+                    )
+                    if (abort.get()) break
+                    if (!result.completed || result.response == null) {
+                        if (result.error != null) {
+                            handler.post { adapter?.statusText = "请求失败：${result.error}"; adapter?.submit() }
+                        }
+                        break
+                    }
+
+                    saveUsage(result.response!!)
+                    val resp = result.response!!
+                    val output = resp.optJSONArray("output")
+                    val calls = mutableListOf<Pair<JSONObject, String>>()
+                    var finalText = StringBuilder()
+                    for (i in 0 until (output?.length() ?: 0)) {
+                        val item = output!!.optJSONObject(i) ?: continue
+                        when (item.optString("type")) {
+                            "function_call" -> {
+                                val callId = item.optString("call_id").ifEmpty { item.optString("id") }
+                                items.put(DirectClient.functionCallItem(callId, item.optString("name"), item.optString("arguments")))
+                                calls.add(item to callId)
+                            }
+                            "web_search_call" -> items.put(item)
+                            "reasoning" -> items.put(item)
+                            "message" -> {
+                                val content = item.optJSONArray("content")
+                                for (j in 0 until (content?.length() ?: 0)) {
+                                    val c = content!!.optJSONObject(j)
+                                    if (c?.optString("type") == "output_text") {
+                                        finalText.append(c.optString("text"))
+                                    }
                                 }
                             }
                         }
                     }
 
-                    override fun onError(message: String) {
-                        handler.post { adapter?.statusText = "错误：$message"; adapter?.submit() }
+                    if (calls.isNotEmpty()) {
+                        var hasTool = false
+                        for ((call, callId) in calls) {
+                            if (abort.get()) break
+                            val name = call.optString("name")
+                            val args = call.optString("arguments")
+                            handler.post { addToolCard(aiMsg.id, name, "$name ${args.take(50)}", "") }
+                            val resultStr = runTool(name, args)
+                            items.put(DirectClient.functionCallOutputItem(callId, resultStr))
+                            handler.post { updateToolCard(aiMsg.id, callId, resultStr) }
+                            hasTool = true
+                        }
+                        if (!hasTool) break
+                        handler.post { adapter?.statusText = "工具完成，继续生成…"; adapter?.submit() }
+                        continue // 关键：继续下一轮工具循环
+                    } else if (finalText.isNotEmpty()) {
+                        appendFinal(aiMsg, finalText.toString())
                     }
-                }
-                val result = client.create(
-                    items, SMALL_SYSTEM_PROMPT, SMALL_TOOLS, listener, abort,
-                    LocalEngine.reasoningSetting(this).takeIf { it != "auto" }
-                )
-                if (result.completed && result.response != null) {
-                    val text = result.response!!.optString("output_text")
-                    if (text.isNotEmpty()) appendFinal(aiMsg, text)
-                } else if (result.error != null) {
-                    handler.post { adapter?.statusText = "请求失败：${result.error}"; adapter?.submit() }
+                    break
                 }
             } catch (e: Exception) {
                 handler.post { adapter?.statusText = "异常：${e.message}"; adapter?.submit() }
             } finally {
                 running = false
+                setAiState(AI_IDLE)
+                updateSendButton()
                 save()
                 handler.post {
                     adapter?.statusText = null
@@ -744,9 +993,46 @@ class FloatingChatService : Service(), ChatListener {
                     ) {
                         "危险命令，请在主界面确认后执行"
                     } else {
-                        LocalAgentManager.runCommand(
-                            this, command, null, (args.optInt("timeout", 30).coerceAtMost(60)) * 1000L
-                        ).trim().ifEmpty { "（无输出）" }
+                        try {
+                            LocalAgentManager.runCommand(
+                                this, command, null,
+                                (args.optInt("timeout", 30).coerceAtMost(60)) * 1000L
+                            ) { p -> runningProc = p }
+                                .trim().ifEmpty { "（无输出）" }
+                        } finally {
+                            runningProc = null
+                        }
+                    }
+                }
+                "tty_read" -> {
+                    if (!com.webcode.app.local.LocalEngine.ttyAccess(this)) {
+                        "未授权：请在设置中开启「允许 AI 读取/注入终端」"
+                    } else if (com.webcode.app.ui.TerminalActivity.current() == null) {
+                        "当前未打开终端页面，无法读取 tty"
+                    } else {
+                        com.webcode.app.ui.TerminalActivity.readTty(maxLines = args.optInt("lines", 200))
+                            ?: "读取终端失败"
+                    }
+                }
+                "tty_read_raw" -> {
+                    if (!com.webcode.app.local.LocalEngine.ttyAccess(this)) {
+                        "未授权：请在设置中开启「允许 AI 读取/注入终端」"
+                    } else if (com.webcode.app.ui.TerminalActivity.current() == null) {
+                        "当前未打开终端页面，无法读取 tty"
+                    } else {
+                        com.webcode.app.ui.TerminalActivity.readTtyRaw()
+                            ?: "读取终端失败"
+                    }
+                }
+                "tty_send" -> {
+                    if (!com.webcode.app.local.LocalEngine.ttyAccess(this)) {
+                        "未授权：请在设置中开启「允许 AI 读取/注入终端」"
+                    } else {
+                        val cmd = args.optString("command", "")
+                        if (cmd.isEmpty()) "命令为空"
+                        else if (com.webcode.app.ui.TerminalActivity.current() == null) "当前未打开终端页面，无法注入 tty"
+                        else if (com.webcode.app.ui.TerminalActivity.writeTty(cmd)) "已注入终端并执行：$cmd"
+                        else "注入终端失败"
                     }
                 }
                 else -> "未知工具: $name"
@@ -760,6 +1046,23 @@ class FloatingChatService : Service(), ChatListener {
         chatList?.post {
             val a = adapter ?: return@post
             if (a.itemCount > 0) chatList?.scrollToPosition(a.itemCount - 1)
+        }
+    }
+
+    /** 累计保存小窗会话的 token 统计（与全屏 usage 同存储） */
+    private fun saveUsage(resp: JSONObject) {
+        try {
+            val usage = resp.optJSONObject("usage") ?: return
+            val sid = sessionId ?: return
+            val pt = usage.optLong("input_tokens")
+            val ct = usage.optLong("output_tokens")
+            if (pt <= 0 && ct <= 0) return
+            val engine = LocalEngine.getInstance(appContext()) ?: return
+            val old = engine.floatGet(sid)?.usage
+            val oldP = old?.optLong("promptTokens") ?: 0L
+            val oldC = old?.optLong("completionTokens") ?: 0L
+            LocalStore(this).setUsage(sid, oldP + pt, oldC + ct)
+        } catch (e: Exception) {
         }
     }
 
@@ -780,10 +1083,35 @@ class FloatingChatService : Service(), ChatListener {
         android.widget.Toast.makeText(this, "提问请在全屏界面操作", android.widget.Toast.LENGTH_SHORT).show()
     }
 
+    private fun buildKeepAliveNotification(): android.app.Notification {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = android.app.NotificationChannel(
+                "webcode_float", "小窗保活", android.app.NotificationManager.IMPORTANCE_LOW
+            )
+            getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(ch)
+        }
+        val open = android.app.PendingIntent.getActivity(
+            this, 0,
+            Intent(this, com.webcode.app.ui.LocalSetupActivity::class.java),
+            android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        return androidx.core.app.NotificationCompat.Builder(this, "webcode_float")
+            .setSmallIcon(R.drawable.ic_robot)
+            .setContentTitle("WebCode 小窗运行中")
+            .setContentText("点击管理 · 悬浮球可聊天")
+            .setContentIntent(open)
+            .setOngoing(true)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)
+            .build()
+    }
+
     companion object {
+        private const val FLOAT_NOTIF_ID = 3457
+
         private val SMALL_SYSTEM_PROMPT = """
             你是运行在用户 Android 手机小窗里的本地 AI 助手 "WebCode Local"。
-            可用工具：web_search（联网搜索）、run_command（bash，危险命令会被拒绝）、device_info（设备信息）、open_url（打开网页）。
+            可用工具：web_search（联网搜索）、run_command（bash，危险命令会被拒绝）、device_info（设备信息）、open_url（打开网页）、tty_read/tty_read_raw/tty_send（读取/写入终端页，需用户授权）。
+            工作方式：可以连续调用多个工具直到任务完成；工具出错时分析原因并继续修复（如 dpkg 被中断先运行 dpkg --configure -a），不要调用一次就草率结束；任务真正完成后再给出最终回答。
             回答使用中文，简洁。
         """.trimIndent()
 
@@ -794,6 +1122,23 @@ class FloatingChatService : Service(), ChatListener {
                 JSONObject()
                     .put("command", JSONObject().put("type", "string"))
                     .put("timeout", JSONObject().put("type", "integer")),
+                listOf("command")
+            ),
+            DirectClient.functionTool(
+                "tty_read", "读取当前终端页（tty）最近输出；返回提示「输出过长」时改用 tty_read_raw 读原文",
+                JSONObject()
+                    .put("lines", JSONObject().put("type", "integer")),
+                emptyList()
+            ),
+            DirectClient.functionTool(
+                "tty_read_raw", "读取当前终端页（tty）完整输出原文（无长度上限）",
+                JSONObject(),
+                emptyList()
+            ),
+            DirectClient.functionTool(
+                "tty_send", "向当前终端页（tty）注入命令并回车执行",
+                JSONObject()
+                    .put("command", JSONObject().put("type", "string")),
                 listOf("command")
             ),
             DirectClient.functionTool(

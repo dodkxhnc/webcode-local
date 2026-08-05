@@ -45,6 +45,8 @@ class LocalEngine(context: Context) : ChatEngine {
     private val abort = AtomicBoolean(false)
     private var running = false
     private var currentSessionId: String? = null
+    @Volatile
+    private var currentProcess: Process? = null
 
     // 本轮 UI 状态
     private var currentAssistantId = ""
@@ -202,12 +204,10 @@ class LocalEngine(context: Context) : ChatEngine {
         // 清洗本地记忆：丢弃悬空的 function_call（上次中断留下的），空输出补占位，避免 400
         val items = sanitizeItems(initialItems)
         var step = 0
-
         // 本轮用户消息 item
         items.put(DirectClient.messageItem("user", lastUserContent))
 
-        var silentRounds = 0
-        while (step < 16 && !abort.get()) {
+        while (!abort.get()) {
             if (abort.get()) break
             step++
             emit("status", JSONObject()
@@ -328,21 +328,16 @@ class LocalEngine(context: Context) : ChatEngine {
             // 执行工具调用
             if (pendingCalls.isEmpty()) {
                 if (finalText.isNotEmpty()) {
-                    appendPart(Part.Text(finalText.toString()))
+                    // 流式阶段 delta 已通过 appendTextLocal 追加过，completed 的 output 是完整文本，
+                    // 直接 appendPart 会导致同一段正文重复；仅在流式未覆盖时才追加
+                    appendFinalIfNeeded(finalText.toString())
                 }
                 if (finalText.isEmpty()) {
-                    // 只产出了思考没有正文：续轮让模型给出答案（静默思考最多 3 轮）
-                    silentRounds++
-                    if (silentRounds >= 3) {
-                        storeItems(sid, items)
-                        storeMessages(sid)
-                        emit("status", JSONObject().put("messageId", currentAssistantId).put("status", ""))
-                        emit("done", JSONObject()
-                            .put("messageId", currentAssistantId)
-                            .put("finishReason", "stop")
-                            .put("sessionId", sid))
-                        return
-                    }
+                    // 模型在思考（无正文无工具）：继续续轮直到给出结果。
+                    // 无隐藏轮次限制；如模型异常循环，用户可随时用停止按钮终止
+                    emit("status", JSONObject()
+                        .put("messageId", currentAssistantId)
+                        .put("status", "继续思考…"))
                     continue
                 }
                 storeItems(sid, items)
@@ -354,7 +349,6 @@ class LocalEngine(context: Context) : ChatEngine {
                     .put("sessionId", sid))
                 return
             }
-            silentRounds = 0
 
             for ((fc, callId) in pendingCalls) {
                 if (abort.get()) break
@@ -480,6 +474,35 @@ class LocalEngine(context: Context) : ChatEngine {
                     }
                     runShellCommand(command, args.optInt("timeout", 120))
                 }
+                "tty_read" -> {
+                    if (!ttyAccess(appContext)) {
+                        return "未授权：请在设置中开启「允许 AI 读取/注入终端」，当前不可读取终端"
+                    }
+                    val act = com.webcode.app.ui.TerminalActivity.current()
+                        ?: return "当前未打开终端页面，无法读取 tty"
+                    com.webcode.app.ui.TerminalActivity.readTty(maxLines = args.optInt("lines", 200))
+                        ?: "读取终端失败"
+                }
+                "tty_read_raw" -> {
+                    if (!ttyAccess(appContext)) {
+                        return "未授权：请在设置中开启「允许 AI 读取/注入终端」，当前不可读取终端"
+                    }
+                    val act = com.webcode.app.ui.TerminalActivity.current()
+                        ?: return "当前未打开终端页面，无法读取 tty"
+                    com.webcode.app.ui.TerminalActivity.readTtyRaw()
+                        ?: "读取终端失败"
+                }
+                "tty_send" -> {
+                    if (!ttyAccess(appContext)) {
+                        return "未授权：请在设置中开启「允许 AI 读取/注入终端」，当前不可写入终端"
+                    }
+                    val cmd = args.optString("command", "")
+                    if (cmd.isEmpty()) return "命令为空"
+                    val act = com.webcode.app.ui.TerminalActivity.current()
+                        ?: return "当前未打开终端页面，无法注入 tty"
+                    if (!com.webcode.app.ui.TerminalActivity.writeTty(cmd)) return "注入终端失败"
+                    "已注入终端并执行：$cmd"
+                }
                 else -> {
                     // MCP 工具路由：mcp_<服务器>_<工具>
                     if (name.startsWith("mcp_")) {
@@ -557,9 +580,11 @@ class LocalEngine(context: Context) : ChatEngine {
             com.webcode.app.termux.LocalAgentManager.runCommand(
                 appContext, command, workspaceDir,
                 (if (timeoutSec > 0) timeoutSec else 120) * 1000L
-            )
+            ) { p -> currentProcess = p }
         } catch (e: Exception) {
             "命令执行失败: ${e.message ?: e.toString()}"
+        } finally {
+            currentProcess = null
         }
     }
 
@@ -610,6 +635,16 @@ class LocalEngine(context: Context) : ChatEngine {
         currentMessages.find { it.id == currentAssistantId }?.parts?.add(part)
     }
 
+    /** 流式 delta 已追加过完整文本时跳过，避免 completed 后重复（工具循环每轮都可能触发） */
+    private fun appendFinalIfNeeded(text: String) {
+        val m = currentMessages.find { it.id == currentAssistantId } ?: return
+        val last = m.parts.lastOrNull()
+        if (last is Part.Text && last.text.length >= text.length && last.text.endsWith(text)) {
+            return
+        }
+        appendPart(Part.Text(text))
+    }
+
     private fun appendTextLocal(text: String) {
         val m = currentMessages.find { it.id == currentAssistantId } ?: return
         val last = m.parts.lastOrNull()
@@ -650,6 +685,11 @@ class LocalEngine(context: Context) : ChatEngine {
     /* ============ 控制 ============ */
     override fun cancel(sessionId: String?) {
         abort.set(true)
+        // 立即终止正在执行的命令进程（否则 run_command 最长等 120s 才返回）
+        try {
+            currentProcess?.destroyForcibly()
+        } catch (e: Exception) {
+        }
     }
 
     override fun subscribe(sessionId: String, listener: EngineListener) {
@@ -716,6 +756,11 @@ class LocalEngine(context: Context) : ChatEngine {
             - web_search：联网搜索（服务端执行，无需客户端处理）
             - open_url：在手机浏览器打开网页
             - ask_user：需要用户决策时提问
+            - tty_read / tty_read_raw / tty_send：读取/写入当前打开的终端页（需用户在设置中授权，未授权会返回提示）
+            工作方式：
+            - 可以连续调用多个工具完成复杂任务，不要只调用一次就结束；每一步根据上一步的输出决定下一步动作
+            - 工具执行出错时（如 apt/dpkg 报错、命令失败）应主动分析错误并继续修复：例如 dpkg 被中断时先运行 "dpkg --configure -a" 再重试安装，而不是直接结束回答
+            - 只有任务真正完成（用户的目标达成，或确认无法完成并解释原因）才输出最终回答
             回答使用中文，简洁直接。
         """.trimIndent()
 
@@ -758,6 +803,23 @@ class LocalEngine(context: Context) : ChatEngine {
                 listOf("command")
             ),
             DirectClient.functionTool(
+                "tty_read", "读取当前打开的终端页（tty）最近输出。若返回提示「输出过长」，请改用 tty_read_raw 读取完整原文。需要用户在设置中开启「允许 AI 读取/注入终端」",
+                JSONObject()
+                    .put("lines", JSONObject().put("type", "integer").put("description", "读取最近的行数，默认 200")),
+                emptyList()
+            ),
+            DirectClient.functionTool(
+                "tty_read_raw", "读取当前终端页（tty）的完整输出原文（无长度上限）。仅在 tty_read 提示输出过长时使用。需要用户在设置中开启「允许 AI 读取/注入终端」",
+                JSONObject(),
+                emptyList()
+            ),
+            DirectClient.functionTool(
+                "tty_send", "向当前打开的终端页（tty）注入命令并回车执行。需要用户在设置中开启「允许 AI 读取/注入终端」",
+                JSONObject()
+                    .put("command", JSONObject().put("type", "string").put("description", "要注入终端执行的命令")),
+                listOf("command")
+            ),
+            DirectClient.functionTool(
                 "ask_user", "向用户提问并等待回答",
                 JSONObject()
                     .put("question", JSONObject().put("type", "string"))
@@ -782,6 +844,7 @@ class LocalEngine(context: Context) : ChatEngine {
         const val KEY_REASONING = "reasoning"
         const val KEY_AUTO_ENTER = "auto_enter"
         const val KEY_ROOTFS = "use_rootfs"
+        const val KEY_TTY_ACCESS = "tty_access_enabled"
 
         fun saveConfig(context: Context, apiKey: String, baseUrl: String, model: String, reasoning: String? = null) {
             val ed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -859,9 +922,24 @@ class LocalEngine(context: Context) : ChatEngine {
                 .edit().putBoolean(KEY_ROOTFS, v).apply()
         }
 
+        /** 是否允许 AI 读取/注入当前终端 tty */
+        fun ttyAccess(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_TTY_ACCESS, false)
+
+        fun setTtyAccess(context: Context, v: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_TTY_ACCESS, v).apply()
+        }
+
         fun reasoningSetting(context: Context): String =
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .getString(KEY_REASONING, "auto") ?: "auto"
+
+        fun setReasoning(context: Context, v: String) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_REASONING, v).apply()
+        }
 
         fun isConfigured(context: Context): Boolean {
             val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)

@@ -274,6 +274,15 @@
                 android:textSize="13sp" />
 
             <CheckBox
+                android:id="@+id/tty_access_cb"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="允许 AI 读取/注入当前终端（tty），需先打开终端页"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <CheckBox
                 android:id="@+id/mount_cb"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -405,6 +414,14 @@
                 android:textSize="13sp" />
 
             <Button
+                android:id="@+id/terminal_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:backgroundTint="@color/panel3"
+                android:text="打开终端（Termux 风格 · Ubuntu bash）"
+                android:textColor="@color/text" />
+
+            <Button
                 android:id="@+id/start_btn"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -428,6 +445,15 @@
                 android:layout_marginTop="8dp"
                 android:backgroundTint="@color/panel3"
                 android:text="小窗模式（悬浮聊天）"
+                android:textColor="@color/text" />
+
+            <Button
+                android:id="@+id/check_update_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="检查更新（当前 v3.1 · 每次启动自动检查）"
                 android:textColor="@color/text" />
         </LinearLayout>
 

@@ -1,14 +1,17 @@
 package com.webcode.app.ui
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import com.webcode.app.BuildConfig
 import com.webcode.app.R
 import com.webcode.app.local.DirectClient
@@ -72,6 +75,13 @@ class LocalSetupActivity : AppCompatActivity() {
         }
         rootfsCb.setOnCheckedChangeListener { _, checked ->
             com.webcode.app.local.LocalEngine.setRootfs(this, checked)
+        }
+
+        // ===== AI 访问终端 tty 权限 =====
+        val ttyAccessCb = findViewById<android.widget.CheckBox>(R.id.tty_access_cb)
+        ttyAccessCb.isChecked = com.webcode.app.local.LocalEngine.ttyAccess(this)
+        ttyAccessCb.setOnCheckedChangeListener { _, checked ->
+            com.webcode.app.local.LocalEngine.setTtyAccess(this, checked)
         }
 
         // ===== 外部路径挂载 =====
@@ -191,6 +201,9 @@ class LocalSetupActivity : AppCompatActivity() {
         findViewById<View>(R.id.download_rootfs_btn).setOnClickListener {
             downloadRootfs()
         }
+        findViewById<View>(R.id.terminal_btn).setOnClickListener {
+            startActivity(Intent(this, TerminalActivity::class.java))
+        }
         findViewById<View>(R.id.start_btn).setOnClickListener {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
@@ -206,6 +219,21 @@ class LocalSetupActivity : AppCompatActivity() {
         findViewById<View>(R.id.float_btn).setOnClickListener {
             // 必须先有悬浮窗权限，否则服务静默退出
             com.webcode.app.termux.PixelOverlay.requestOverlayPermissionIfNeeded(this)
+            // Android 13+ 请求通知权限（前台服务通知保活需要）
+            try {
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        this, android.Manifest.permission.POST_NOTIFICATIONS
+                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) {
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                        201
+                    )
+                }
+            } catch (e: Exception) {
+            }
             if (android.provider.Settings.canDrawOverlays(this)) {
                 FloatingChatService.start(this)
                 Toast.makeText(this, "小窗已开启：点击悬浮球展开", Toast.LENGTH_SHORT).show()
@@ -214,6 +242,40 @@ class LocalSetupActivity : AppCompatActivity() {
             }
         }
 
+        // ===== 手动检查更新 =====
+        findViewById<View>(R.id.check_update_btn).setOnClickListener {
+            val btn = findViewById<Button>(R.id.check_update_btn)
+            btn.isEnabled = false
+            Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show()
+            com.webcode.app.local.UpdateChecker.checkLatest { info ->
+                runOnUiThread {
+                    btn.isEnabled = true
+                    if (info == null) {
+                        Toast.makeText(this, "检查更新失败：无法连接仓库（请检查网络）", Toast.LENGTH_LONG).show()
+                    } else if (info.versionCode <= BuildConfig.VERSION_CODE) {
+                        Toast.makeText(this, "当前已是最新版本（v${com.webcode.app.BuildConfig.VERSION_NAME}）", Toast.LENGTH_SHORT).show()
+                    } else {
+                        android.app.AlertDialog.Builder(this)
+                            .setTitle("发现新版本 ${info.versionName}")
+                            .setMessage(info.notes.ifEmpty { "有新版本可用" })
+                            .setPositiveButton("下载更新") { _, _ ->
+                                downloadUpdate(info.apkUrl)
+                            }
+                            .setNegativeButton("忽略", null)
+                            .show()
+                    }
+                }
+            }
+        }
+
+    }
+
+    private fun downloadUpdate(url: String) {
+        if (url.isBlank()) {
+            Toast.makeText(this, "缺少下载地址", Toast.LENGTH_SHORT).show()
+            return
+        }
+        com.webcode.app.local.UpdateChecker.downloadWithDialog(this, url)
     }
 
     private fun renderMounts() {

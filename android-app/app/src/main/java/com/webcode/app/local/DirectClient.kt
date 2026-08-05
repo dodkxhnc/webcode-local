@@ -63,7 +63,7 @@ class DirectClient(
         if (reasoningEffort != null && reasoningEffort.isNotEmpty()) {
             body.put("reasoning", JSONObject().put("effort", reasoningEffort))
         }
-        body.put("max_output_tokens", 8192)
+        // 不设 max_output_tokens：输出长度交给 API 默认（不做人为截断，避免长任务被截停）
 
         var conn: HttpURLConnection? = null
         try {

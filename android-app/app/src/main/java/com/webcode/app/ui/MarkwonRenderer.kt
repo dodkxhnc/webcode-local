@@ -1,15 +1,12 @@
 package com.webcode.app.ui
 
 import android.content.Context
-import android.text.style.ClickableSpan
 import androidx.core.content.ContextCompat
 import com.webcode.app.R
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.core.MarkwonTheme
 import io.noties.markwon.ext.latex.JLatexMathPlugin
-import android.text.method.ArrowKeyMovementMethod
-import io.noties.markwon.core.spans.CodeBlockSpan
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
 
@@ -38,6 +35,15 @@ object MarkwonRenderer {
             // 行内 $...$ 渲染会造成字体基线偏移，禁用；保留 $$...$$ 块级公式
             latexBuilder.inlinesEnabled(false)
             latexBuilder.theme()
+                // 默认 blockFitCanvas=true 会把宽度小于行宽的公式横向拉满（宽拉伸高不变）
+                // 导致公式变形、与上下行文字错位；关闭后保持原始宽高比
+                .blockFitCanvas(false)
+                // 块级公式与上下正文之间留出空隙，避免贴死
+                .blockPadding(
+                    io.noties.markwon.ext.latex.JLatexMathTheme.Padding.symmetric(
+                        (4 * density).toInt(), (12 * density).toInt()
+                    )
+                )
                 .textColor(text)
                 .inlineTextColor(codeFg)
                 .blockTextColor(text)
@@ -65,50 +71,26 @@ object MarkwonRenderer {
 
     fun setMarkdown(textView: android.widget.TextView, markdown: String) {
         val spanned = get(textView.context).toMarkdown(markdown)
-        val builder = spanned as? android.text.SpannableStringBuilder
-            ?: android.text.SpannableStringBuilder(spanned)
-        // 代码块支持点击复制
+        textView.text = spanned
+        // 系统选区：长按可选取复制（不设 LinkMovementMethod，避免其吞掉长按事件）
         try {
-            val spans = builder.getSpans(0, builder.length, CodeBlockSpan::class.java)
-            if (spans.isNotEmpty()) {
-                val ctx = textView.context
-                for (cs in spans) {
-                    val start = builder.getSpanStart(cs)
-                    val end = builder.getSpanEnd(cs)
-                    if (start >= 0 && end > start) {
-                        val code = builder.substring(start, end).trim()
-                        builder.setSpan(
-                            object : android.text.style.ClickableSpan() {
-                                override fun onClick(widget: android.view.View) {
-                                    val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE)
-                                            as android.content.ClipboardManager
-                                    cm.setPrimaryClip(
-                                        android.content.ClipData.newPlainText("code", code)
-                                    )
-                                    android.widget.Toast.makeText(
-                                        ctx, "代码已复制", android.widget.Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+            textView.setTextIsSelectable(true)
+            textView.movementMethod = android.text.method.ArrowKeyMovementMethod.getInstance()
+        } catch (e: Exception) {
+        }
+    }
 
-                                override fun updateDrawState(ds: android.text.TextPaint) {
-                                    ds.isUnderlineText = false
-                                }
-                            },
-                            start, end,
-                            android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                        )
-                    }
-                }
+    /** 提取 markdown 中的所有 ``` 代码块内容（用于选区菜单"复制代码块"） */
+    fun extractCodeBlocks(markdown: String): List<String> {
+        val out = mutableListOf<String>()
+        try {
+            val re = Regex("```[\\w+-]*\\s*\\n?([\\s\\S]*?)```")
+            for (m in re.findAll(markdown)) {
+                val code = m.groupValues[1].trim('\n')
+                if (code.isNotBlank()) out.add(code)
             }
         } catch (e: Exception) {
         }
-        textView.text = builder
-        // 代码块的 ClickableSpan 会让 TextView 切换成 LinkMovementMethod 导致长按无法选取，
-        // 强制恢复 ArrowKeyMovementMethod + 程序化开启选取（同时保留点击代码块复制与长按选择）
-        try {
-            textView.setTextIsSelectable(true)
-            textView.movementMethod = ArrowKeyMovementMethod.getInstance()
-        } catch (e: Exception) {
-        }
+        return out
     }
 }

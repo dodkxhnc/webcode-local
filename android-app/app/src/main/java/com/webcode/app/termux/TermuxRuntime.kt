@@ -127,9 +127,166 @@ object TermuxRuntime {
         }
     }
 
+    /**
+     * 使用国内镜像（阿里云）：archive.ubuntu.com 在国内慢/不稳，导致 apt 下载失败。
+     * 重写 /etc/apt/sources.list.d/ubuntu.sources（deb822 格式）。
+     * 关键：
+     *  - arm64/arm 必须走 ubuntu-ports（mirrors.aliyun.com/ubuntu/ 只有 amd64 索引，
+     *    arm64 请求 binary-arm64 全部 404 → apt update 索引为空 → Unable to locate package）
+     *  - x86_64/i686 用 mirrors.aliyun.com/ubuntu/
+     *  - Suites 从 /etc/os-release 动态读取代号，读不到默认 questing（26.04 LTS）
+     */
+    fun ensureAptMirror() {
+        try {
+            if (!isRootfsInstalled()) return
+            val f = File(rootfsDir, "etc/apt/sources.list.d/ubuntu.sources")
+            f.parentFile?.mkdirs()
+            val arch = archName()
+            val mirror = if (arch == "aarch64" || arch == "arm") {
+                "http://mirrors.aliyun.com/ubuntu-ports/"
+            } else {
+                "http://mirrors.aliyun.com/ubuntu/"
+            }
+            var codename = "questing"
+            try {
+                val osRelease = File(rootfsDir, "etc/os-release").readText()
+                val m = Regex("""^VERSION_CODENAME\s*=\s*(.+)$""", RegexOption.MULTILINE).find(osRelease)
+                if (m != null && m.groupValues[1].isNotBlank()) codename = m.groupValues[1].trim()
+            } catch (e: Exception) {
+            }
+            val keyring = File(rootfsDir, "usr/share/keyrings/ubuntu-archive-keyring.gpg")
+            val signedBy = if (keyring.exists()) {
+                "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg\n"
+            } else {
+                ""
+            }
+            val content = "Types: deb\n" +
+                "URIs: $mirror\n" +
+                "Suites: $codename ${codename}-updates ${codename}-security\n" +
+                "Components: main restricted universe multiverse\n" +
+                signedBy
+            val exists = f.exists()
+            if (!exists || !f.readText().contains("ubuntu-ports") || !f.readText().contains(codename)) {
+                f.writeText(content)
+            }
+        } catch (e: Exception) {
+        }
+    }
+
     /** 确保 proot 就绪（rootfs 模式唯一依赖） */
     fun ensureProot() {
         installProotComponents()
+    }
+
+    /**
+     * 确保 rootfs 的 DNS 可用：
+     * Android 宿主没有 /etc/resolv.conf（DNS 由 netd 处理），
+     * rootfs 自带的 resolv.conf 是空的 → 必须写入公共 DNS 服务器，否则 apt 等全部无法解析。
+     * 注意：新版 Ubuntu 的 resolv.conf 是符号链接（指向 systemd stub），rootfs 无 systemd-resolved
+     * 在跑，必须先删除链接重建普通文件，否则解析依然失败。
+     */
+    fun ensureDns() {
+        ensureAptMirror()
+        // 全量权限修复只跑一次（几千文件 stat 遍历耗时，标记后秒开终端）
+        if (!File(AppFilesDir, ".rootfs_writable_fixed").exists()) {
+            ensureVarLibWritable()
+            ensureRootfsWritable()
+            try {
+                File(AppFilesDir, ".rootfs_writable_fixed").writeText(
+                    System.currentTimeMillis().toString()
+                )
+            } catch (e: Exception) {
+            }
+        }
+        try {
+            if (!isRootfsInstalled()) return
+            val f = File(rootfsDir, "etc/resolv.conf")
+            f.delete()
+            f.parentFile?.mkdirs()
+            f.writeText(
+                "nameserver 223.5.5.5\n" +   // 阿里 DNS
+                "nameserver 114.114.114.114\n" + // 114DNS
+                "nameserver 8.8.8.8\n" +
+                "nameserver 1.1.1.1\n"
+            )
+            val hosts = File(rootfsDir, "etc/hosts")
+            if (!hosts.exists() || !hosts.readText().contains("127.0.0.1")) {
+                hosts.writeText(
+                    "127.0.0.1 localhost\n" +
+                    "::1 localhost ip6-localhost ip6-loopback\n" +
+                    "127.0.1.1 webcode\n"
+                )
+            }
+            // dpkg 备份兜底：Android 上 hard link 受限（proot 已用 --link2symlink），
+            // force-unsafe-io 让 dpkg 跳过 status-old 备份，双保险避免 Permission denied
+            try {
+                val cfgDir = File(rootfsDir, "etc/dpkg/dpkg.cfg.d")
+                cfgDir.mkdirs()
+                val cfg = File(cfgDir, "99webcode")
+                if (!cfg.exists() || !cfg.readText().contains("force-unsafe-io")) {
+                    cfg.writeText("force-unsafe-io\n")
+                }
+            } catch (e: Exception) {
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    /**
+     * 兜底 dpkg/apt 工作目录可写：
+     * 自制 rootfs 镜像若目录权限过严（如 tar 里 /var/lib/dpkg 为 root-only），
+     * dpkg 会报 "error creating new backup file '/var/lib/dpkg/status-old': Permission denied"。
+     * 对 var/lib/dpkg、var/lib/apt、var/cache/apt 递归设置为可写，缺失目录补建。
+     * 注意：proot -0 模式下 rootfs 内的 chmod 会被模拟不生效，必须在这里用真实 uid 设置。
+     */
+    fun ensureVarLibWritable() {
+        try {
+            if (!isRootfsInstalled()) return
+            val targets = listOf("var/lib/dpkg", "var/lib/apt", "var/cache/apt")
+            for (rel in targets) {
+                val dir = File(rootfsDir, rel)
+                if (!dir.exists()) dir.mkdirs()
+                var failed = 0
+                dir.walkTopDown().forEach { p ->
+                    try {
+                        val mode = if (p.isDirectory) 0x1FF else 0x1A4 // 0777 / 0644
+                        android.system.Os.chmod(p.absolutePath, mode)
+                        p.setWritable(true, false)
+                        p.setReadable(true, false)
+                    } catch (e: Exception) {
+                        failed++
+                        try {
+                            // Os.chmod 失败时用外部 chmod 命令后备（不依赖 JNI 绑定）
+                            Runtime.getRuntime().exec(arrayOf("chmod", if (p.isDirectory) "0777" else "0644", p.absolutePath)).waitFor()
+                        } catch (e2: Exception) {
+                        }
+                    }
+                }
+                if (failed > 0) {
+                    writeDiag("ensureVarLibWritable: $rel 有 $failed 个条目 chmod 失败")
+                }
+            }
+        } catch (e: Exception) {
+            writeDiag("ensureVarLibWritable 异常: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * 准备宿主 dpkg 目录（用于 proot -b 绑定 /var/lib/dpkg）：
+     * rootfs 镜像的 dpkg 目录权限可能过严导致 "status-old Permission denied"，
+     * 绑定到 App 私有目录后 100% 可写。首次自动迁移 rootfs 现有 dpkg 状态。
+     */
+    fun ensureHostDpkgDir(context: Context): String {
+        val host = File(context.filesDir, "var_lib_dpkg")
+        host.mkdirs()
+        val root = File(rootfsDir, "var/lib/dpkg")
+        if (root.exists() && (host.listFiles()?.isEmpty() != false)) {
+            try {
+                root.copyRecursively(host, overwrite = true)
+            } catch (e: Exception) {
+            }
+        }
+        return host.absolutePath
     }
 
     private fun copyAssetTo(asset: String, target: File) {
@@ -186,6 +343,11 @@ object TermuxRuntime {
         val target = File(rootfsDir)
         if (target.exists()) target.deleteRecursively()
         target.mkdirs()
+        // rootfs 变了，权限修复标记失效，需要重新全量修复一次
+        try {
+            File(AppFilesDir, ".rootfs_writable_fixed").delete()
+        } catch (e: Exception) {
+        }
         try {
             extractTarGz(tarball, target)
             // 双保险：确保所有可执行目录里的二进制都有执行位
@@ -321,7 +483,8 @@ object TermuxRuntime {
     }
 
     /** 设置文件/目录权限（tar mode 可能为 0，此时给默认值）。
-     *  双保险：Os.chmod + File.setExecutable；失败写入诊断日志 */
+     *  双保险：Os.chmod + File.setExecutable；失败写入诊断日志。
+     *  关键：文件也必须可写（镜像里只读文件会让 dpkg 备份/解包 Permission denied） */
     private fun applyMode(f: File, mode: Int) {
         try {
             val m = if (mode == 0) {
@@ -332,9 +495,44 @@ object TermuxRuntime {
             android.system.Os.chmod(f.absolutePath, m)
             f.setExecutable(true, false)
             f.setReadable(true, false)
-            if (f.isDirectory) f.setWritable(true, false)
+            // 目录和文件都必须可写（owner 位），否则 dpkg 无法创建备份/硬链接
+            f.setWritable(true, false)
         } catch (e: Exception) {
             writeDiag("chmod 失败 ${f.absolutePath}: ${e.message}")
+        }
+    }
+
+    /**
+     * 对已安装的 rootfs 全量补齐写权限（幂等，只修不可写条目）：
+     * 老版本解压时文件没设写位，镜像里只读文件导致 dpkg "unable to make backup link ... Permission denied"
+     * 与 status-old 备份失败。每次终端创建时调用，开销仅 stat 遍历（几百 ms）。
+     */
+    fun ensureRootfsWritable() {
+        try {
+            if (!isRootfsInstalled()) return
+            val root = File(rootfsDir)
+            var fixed = 0
+            root.walkTopDown().forEach { p ->
+                try {
+                    if (p.isDirectory) {
+                        if (!p.canWrite()) {
+                            android.system.Os.chmod(p.absolutePath, 0x1FF)
+                            p.setWritable(true, false)
+                            fixed++
+                        }
+                    } else {
+                        if (!p.canWrite()) {
+                            android.system.Os.chmod(p.absolutePath, 0x1A4)
+                            p.setWritable(true, false)
+                            fixed++
+                        }
+                    }
+                } catch (e: Exception) {
+                }
+            }
+            if (fixed > 0) writeDiag("ensureRootfsWritable: 补齐 $fixed 个不可写条目")
+        } catch (e: Exception) {
+            writeDiag("ensureRootfsWritable 异常: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
