@@ -1,6 +1,6 @@
 {
-  "versionCode": 3,
-  "versionName": "v3.0-beta.1",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.0-beta.1/WebCode-Android-v3.0-beta.1.apk",
-  "notes": "新增：小窗多轮工具循环、中断立即终止命令、会话跨界面同步、版本更新检测"
+  "versionCode": 4,
+  "versionName": "v3.1-beta.2",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.2/WebCode-Android-v3.1-beta.2.apk",
+  "notes": "新增：版本更新检测、中断立即终止命令、小窗会话同步、悬浮窗外点收起、终端秒开。修复：小窗多轮工具循环、TMPDIR/dpkg 权限问题。"
 }
