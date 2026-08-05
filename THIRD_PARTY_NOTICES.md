@@ -24,7 +24,8 @@
 | androidx.appcompat / core-ktx / recyclerview / constraintlayout | Apache-2.0 | Android 官方库 |
 | com.google.android.material:material | Apache-2.0 | Material 组件 |
 | com.squareup.okhttp3:okhttp / okhttp-sse (4.12.0) | Apache-2.0 | HTTP/SSE 客户端 |
-| io.noties.markwon:core / ext-latex / inline-parser / ext-tables (4.6.2) | Apache-2.0 | Markdown/LaTeX 渲染 |
+| io.noties.markwon:core / ext-latex / inline-parser (4.6.2) | Apache-2.0 | Markdown/LaTeX 渲染 |
+| com.atlassian.commonmark:commonmark-ext-gfm-tables (0.13.0) | BSD-2-Clause | Markdown 表格解析（ext-tables 本地化后的解析依赖） |
 
 ## 修改说明
 
@@ -38,6 +39,15 @@
 - `app/src/main/java/com/webcode/app/termux/TermuxRuntime.kt` 为 termux-app 的
   TermuxInstaller / TermuxShellEnvironment / TermuxConstants 的 Kotlin 移植改写
   （GPL-3.0），文件头已注明出处。
+- `app/src/main/java/com/termux/` 为 termux-app 的 terminal-emulator 与 terminal-view
+  源码目录拷贝（GPL-3.0），含以下修改：
+  1. `TerminalSession.java`：`cleanupResources()` 的 `JNI.close(fd)` 改为
+     本项目 `TerminalPty.ptyClose()`（不打包 termux 原生库，避免 UnsatisfiedLinkError）
+  2. `TerminalViewClient.java` / `TerminalView.java`：新增默认回调
+     `onModifierKeysConsumed()`，实现 CTRL/ALT 单次生效（输入一个字符后自动复位）
+- `app/src/main/java/io/noties/markwon/ext/tables/` 为 markwon-ext-tables 4.6.2
+  源码本地化拷贝（Apache-2.0），含修改：`TableRowSpan.java` 修复表格行
+  垂直对齐（baseline 居中 + 内容垂直居中），解决表格文字相对正文的垂直偏移。
 
 ## 许可文本
 
