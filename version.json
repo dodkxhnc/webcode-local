@@ -1,6 +1,6 @@
 {
-  "versionCode": 5,
-  "versionName": "v3.1-beta.3",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.3/WebCode-Android-v3.1-beta.3.apk",
-  "notes": "新增：悬浮球状态灯（思考橙/输出蓝/工具闪烁绿）、GitHub 图标、小窗思考开关与强度快捷切换、小窗会话记忆、历史会话原子写入。修复：悬浮窗外点穿透不误触收起、更新检测多源回退。"
+  "versionCode": 6,
+  "versionName": "v3.1-beta.4",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.4/WebCode-Android-v3.1-beta.4.apk",
+  "notes": "更新下载体验：实时进度条、下载完成对话框（立即安装/稍后安装）、安装未知应用权限引导。"
 }
