@@ -299,14 +299,8 @@ class FloatingChatService : Service(), ChatListener {
             params.x = px.coerceIn(0, (screenW - w - 8).coerceAtLeast(0))
             params.y = by.coerceIn(0, (screenH - h - 8).coerceAtLeast(0))
 
-            // 内容面板固定 280x400（全屏透明层方案已弃用：改为固定窗口 + NOT_TOUCH_MODAL 穿透）
+            // 内容面板跟随窗口尺寸自适应（窗口缩放时布局自动重排）
             val content = view.findViewById<View>(R.id.float_panel_content)
-            val cl = content.layoutParams as FrameLayout.LayoutParams
-            cl.width = w
-            cl.height = h
-            cl.marginStart = 0
-            cl.topMargin = 0
-            content.layoutParams = cl
             panelContent = content
 
             chatList = view.findViewById(R.id.float_chat_list)
@@ -329,7 +323,7 @@ class FloatingChatService : Service(), ChatListener {
                 menuOverlay.visibility = View.GONE
                 showHistoryInPanel()
             }
-            // 思考设置：一个按钮 → PopupMenu 选择（思考开/关 + 强度 自动/低/中/高/最高）
+            // 思考设置：单选对话框，点击即保存（持久生效，关闭面板不丢）
             val thinkingView = view.findViewById<TextView>(R.id.float_opt_thinking)
             fun refreshThinkingLabel() {
                 val cur = LocalEngine.reasoningSetting(this)
@@ -342,31 +336,29 @@ class FloatingChatService : Service(), ChatListener {
                     "max" -> "最高"
                     else -> "自动"
                 }
-                thinkingView.text = "🧠 思考设置：$on · $effort"
+                thinkingView.text = "思考设置：$on · $effort"
             }
             refreshThinkingLabel()
             thinkingView.setOnClickListener {
+                val options = listOf("思考：关闭", "思考：开启 · 自动", "思考：开启 · 低", "思考：开启 · 中", "思考：开启 · 高", "思考：开启 · 最高")
+                val values = listOf("none", "auto", "low", "medium", "high", "max")
                 val cur = LocalEngine.reasoningSetting(this)
-                val popup = android.widget.PopupMenu(this, thinkingView)
-                fun add(label: String, value: String) {
-                    val item = popup.menu.add(label)
-                    if (value == cur) item.isChecked = true
-                    popup.menu.setGroupCheckable(0, true, false)
-                    item.setOnMenuItemClickListener {
-                        LocalEngine.setReasoning(this, value)
+                val checked = values.indexOf(cur).coerceAtLeast(0)
+                // Service 上下文必须用 overlay 窗口类型，否则 Dialog 弹不出来
+                val dlg = android.app.AlertDialog.Builder(this)
+                    .setTitle("思考设置")
+                    .setSingleChoiceItems(options.toTypedArray(), checked) { d, which ->
+                        LocalEngine.setReasoning(this, values[which])
                         refreshThinkingLabel()
-                        true
+                        d.dismiss()
                     }
+                    .setNegativeButton("取消", null)
+                    .create()
+                try {
+                    dlg.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+                } catch (e: Exception) {
                 }
-                add("思考：开启", "auto")
-                add("思考：关闭", "none")
-                popup.menu.add("——— 强度 ———").setEnabled(false)
-                add("强度：自动", "auto")
-                add("强度：低", "low")
-                add("强度：中", "medium")
-                add("强度：高", "high")
-                add("强度：最高", "max")
-                popup.show()
+                dlg.show()
             }
             menuOverlay.setOnClickListener { menuOverlay.visibility = View.GONE }
 

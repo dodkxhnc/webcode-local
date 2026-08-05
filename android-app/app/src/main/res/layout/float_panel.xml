@@ -7,8 +7,8 @@
 
     <LinearLayout
         android:id="@+id/float_panel_content"
-        android:layout_width="280dp"
-        android:layout_height="400dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:orientation="vertical"
         android:background="@drawable/bg_float_panel"
         android:layout_gravity="top|start">
@@ -104,7 +104,7 @@
                     android:background="@drawable/bg_float_option"
                     android:gravity="center_vertical"
                     android:padding="12dp"
-                    android:text="🧠 思考设置：开 · 自动"
+                    android:text="思考设置：开 · 自动"
                     android:textColor="@color/text"
                     android:textSize="14sp" />
 
