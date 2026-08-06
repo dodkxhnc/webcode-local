@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "v3.1-beta.6",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.6/WebCode-Android-v3.1-beta.6.apk",
-  "notes": "修复：AI 输出中关闭面板后无法停止（重开面板按钮状态正确、长按悬浮球停止、防并发发送）。"
+  "versionCode": 9,
+  "versionName": "v3.1-beta.7",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.7/WebCode-Android-v3.1-beta.7.apk",
+  "notes": "修复：立即安装闪退（补充 REQUEST_INSTALL_PACKAGES 权限声明）。"
 }
