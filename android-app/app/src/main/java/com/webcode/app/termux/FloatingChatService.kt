@@ -210,6 +210,16 @@ class FloatingChatService : Service(), ChatListener {
 
             view.isClickable = true
             view.setOnClickListener { togglePanel() }
+            // 长按悬浮球 = 中断 AI（面板收起时也能停止输出）
+            view.setOnLongClickListener {
+                if (running) {
+                    interrupt()
+                    android.widget.Toast.makeText(this, "已停止 AI 输出", android.widget.Toast.LENGTH_SHORT).show()
+                } else {
+                    togglePanel()
+                }
+                true
+            }
             view.setOnTouchListener { v, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
@@ -403,6 +413,8 @@ class FloatingChatService : Service(), ChatListener {
             wm!!.addView(view, params)
             panelView = view
             panelParams = params
+            // 重开面板时按当前运行状态刷新按钮图标（否则 AI 输出中会显示"发送"，误导且无法停止）
+            updateSendButton()
             renderLog()
         } catch (e: Exception) {
             DiagLog.log(this, "Float", "showPanel 失败: ${e.message ?: e.javaClass.simpleName}")
@@ -658,6 +670,11 @@ class FloatingChatService : Service(), ChatListener {
         val engine = LocalEngine.getInstance(appContext()) ?: return
         if (!LocalEngine.isConfigured(this)) {
             android.widget.Toast.makeText(this, "请先在设置页填写 API Key", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (running) {
+            // 防并发：AI 输出中不允许再发消息（点击中断按钮请走 interrupt）
+            android.widget.Toast.makeText(this, "AI 正在输出，请先停止", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
         if (sessionId == null) newSession()
