@@ -319,7 +319,25 @@ class FloatingChatService : Service(), ChatListener {
             chatList = view.findViewById(R.id.float_chat_list)
             titleText = view.findViewById(R.id.float_title)
             inputBox = view.findViewById(R.id.float_input)
-            // 输入框聚焦时才允许窗口获得焦点（弹键盘），失焦恢复不抢焦点
+            // 输入框聚焦时才允许窗口获得焦点（弹键盘），失焦恢复不抢焦点。
+            // 注意：NOT_FOCUSABLE 窗口内 EditText 无法直接聚焦，须触摸时先切换窗口 flag
+            inputBox?.setOnTouchListener { v, ev ->
+                if (ev.action == MotionEvent.ACTION_UP) {
+                    try {
+                        params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        wm?.updateViewLayout(view, params)
+                    } catch (e: Exception) {
+                    }
+                    v.requestFocus()
+                    try {
+                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                                as android.view.inputmethod.InputMethodManager
+                        imm.showSoftInput(v, 0)
+                    } catch (e: Exception) {
+                    }
+                }
+                true
+            }
             inputBox?.setOnFocusChangeListener { _, hasFocus ->
                 try {
                     params.flags = if (hasFocus) {

@@ -246,6 +246,24 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
             // 输入
             val input = view.findViewById<EditText>(R.id.ft_input)
+            // NOT_FOCUSABLE 窗口内 EditText 无法直接获得焦点，改为触摸时手动切换窗口 flag 再聚焦
+            input.setOnTouchListener { v, ev ->
+                if (ev.action == MotionEvent.ACTION_UP) {
+                    try {
+                        params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        wm?.updateViewLayout(view, params)
+                    } catch (e: Exception) {
+                    }
+                    v.requestFocus()
+                    try {
+                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                                as android.view.inputmethod.InputMethodManager
+                        imm.showSoftInput(v, 0)
+                    } catch (e: Exception) {
+                    }
+                }
+                true
+            }
             input.setOnFocusChangeListener { _, hasFocus ->
                 try {
                     params.flags = if (hasFocus) {
@@ -307,13 +325,14 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
         panelParams = null
     }
 
-    /** 右下角 ◢ 缩放手柄：调整面板窗口大小 */
+    /** 右下角 ◢ 缩放手柄：调整面板窗口大小（防抖，避免拖动时频繁 SIGWINCH 重排终端） */
     private fun setupResizeHandle(panel: View) {
         val handle = panel.findViewById<View>(R.id.ft_resize)
         var startX = 0f
         var startY = 0f
         var startW = 0
         var startH = 0
+        var lastUpdate = 0L
         handle.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -324,9 +343,29 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
                         startW = lp.width
                         startH = lp.height
                     }
+                    lastUpdate = System.currentTimeMillis()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
+                    val lp = panelParams ?: return@setOnTouchListener true
+                    val dx = (event.rawX - startX).toInt()
+                    val dy = (event.rawY - startY).toInt()
+                    val nw = (startW + dx).coerceIn(dp(240), dp(560))
+                    val nh = (startH + dy).coerceIn(dp(300), dp(900))
+                    if (nw == lp.width && nh == lp.height) return@setOnTouchListener true
+                    val now = System.currentTimeMillis()
+                    if (now - lastUpdate < 60) return@setOnTouchListener true // 防抖合并
+                    lastUpdate = now
+                    lp.width = nw
+                    lp.height = nh
+                    try {
+                        panelView?.let { wm?.updateViewLayout(it, lp) }
+                    } catch (e: Exception) {
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    // 最终尺寸校准一次（合并最后一次 move）
                     val lp = panelParams ?: return@setOnTouchListener true
                     val dx = (event.rawX - startX).toInt()
                     val dy = (event.rawY - startY).toInt()
