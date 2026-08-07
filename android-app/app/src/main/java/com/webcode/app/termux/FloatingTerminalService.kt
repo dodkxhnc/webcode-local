@@ -28,6 +28,29 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
     companion object {
         private const val NOTIF_ID = 3458
 
+        @Volatile
+        private var instance: FloatingTerminalService? = null
+
+        fun current(): FloatingTerminalService? = instance
+
+        /** AI 工具入口：读取当前终端 tty 最近输出（终端小窗也算打开 tty） */
+        fun readTty(maxLines: Int = 200): String? {
+            val act = instance ?: return null
+            return act.readTtyText(maxLines)
+        }
+
+        /** AI 工具入口：读取终端完整输出原文 */
+        fun readTtyRaw(): String? {
+            val act = instance ?: return null
+            return act.readTtyRaw()
+        }
+
+        /** AI 工具入口：向终端 tty 注入命令并回车执行 */
+        fun writeTty(command: String): Boolean {
+            val act = instance ?: return false
+            return act.writeTtyText(command)
+        }
+
         fun start(context: Context) {
             try {
                 context.startForegroundService(Intent(context, FloatingTerminalService::class.java))
@@ -72,6 +95,7 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         try {
             startForeground(NOTIF_ID, buildKeepAliveNotification())
         } catch (e: Exception) {
@@ -89,6 +113,7 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
     }
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         try {
             session?.finishIfRunning()
         } catch (e: Exception) {
@@ -541,6 +566,39 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
         override fun logVerbose(tag: String, message: String) {}
         override fun logStackTraceWithMessage(tag: String, message: String, e: Exception) {}
         override fun logStackTrace(tag: String, e: Exception) {}
+    }
+
+    /* ============ AI tty 读写（与全屏终端一致，需设置中开启权限） ============ */
+    fun readTtyText(maxLines: Int): String? {
+        val s = session ?: return null
+        val emu = s.emulator ?: return null
+        val text = emu.getScreen().getTranscriptText()
+        if (text.isBlank()) return "(终端无内容)"
+        val lines = text.lines()
+        val shown = if (lines.size > maxLines) lines.takeLast(maxLines) else lines
+        val body = shown.joinToString("\n")
+        return if (body.length > 30000) {
+            "终端输出过长（最近 ${shown.size} 行共 ${body.length} 字符，已超出单次传输上限）。" +
+                "如需完整原文，请调用 tty_read_raw 工具读取全部内容。\n" +
+                "（以下为最近 ${shown.size} 行的开头部分）\n" + body.take(3000)
+        } else {
+            "终端最近 ${shown.size}/${lines.size} 行：\n" + body
+        }
+    }
+
+    fun readTtyRaw(): String? {
+        val s = session ?: return null
+        val emu = s.emulator ?: return null
+        val text = emu.getScreen().getTranscriptText()
+        if (text.isBlank()) return "(终端无内容)"
+        return "终端完整输出（${text.length} 字符）：\n" + text
+    }
+
+    fun writeTtyText(command: String): Boolean {
+        val s = session ?: return false
+        val bytes = (command + "\n").toByteArray(Charsets.UTF_8)
+        s.write(bytes, 0, bytes.size)
+        return true
     }
 
     /* ============ 输入 ============ */
