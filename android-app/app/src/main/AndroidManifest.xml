@@ -59,6 +59,15 @@
                 android:value="floating_chat_keep_alive" />
         </service>
 
+        <service
+            android:name=".termux.FloatingTerminalService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_terminal_keep_alive" />
+        </service>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.webcode.app.fileprovider"

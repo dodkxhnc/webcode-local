@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/term_panel_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#101010">
+
+    <LinearLayout
+        android:id="@+id/term_panel_header"
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#202020"
+        android:paddingStart="4dp"
+        android:paddingEnd="2dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:text="终端小窗 · Ubuntu bash"
+            android:textColor="@color/text"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <ImageButton
+            android:id="@+id/term_panel_close"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_close"
+            android:contentDescription="关闭" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:id="@+id/term_panel_frame"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#000000" />
+
+    <!-- 扩展键（精简） -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#202020"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:id="@+id/term_panel_keys"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingBottom="4dp"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp">
+
+            <TextView
+                android:id="@+id/ft_key_esc"
+                style="@style/TermKey"
+                android:text="ESC" />
+
+            <TextView
+                android:id="@+id/ft_key_tab"
+                style="@style/TermKey"
+                android:text="TAB" />
+
+            <TextView
+                android:id="@+id/ft_key_ctrl"
+                style="@style/TermKey"
+                android:text="CTRL" />
+
+            <TextView
+                android:id="@+id/ft_key_alt"
+                style="@style/TermKey"
+                android:text="ALT" />
+
+            <TextView
+                android:id="@+id/ft_key_up"
+                style="@style/TermKey"
+                android:text="↑" />
+
+            <TextView
+                android:id="@+id/ft_key_down"
+                style="@style/TermKey"
+                android:text="↓" />
+
+            <TextView
+                android:id="@+id/ft_key_left"
+                style="@style/TermKey"
+                android:text="←" />
+
+            <TextView
+                android:id="@+id/ft_key_right"
+                style="@style/TermKey"
+                android:text="→" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
+    <!-- 输入行 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="#202020"
+        android:padding="4dp">
+
+        <EditText
+            android:id="@+id/ft_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@android:color/transparent"
+            android:fontFamily="monospace"
+            android:hint="输入命令…"
+            android:imeOptions="actionGo"
+            android:inputType="text"
+            android:textColor="#E8E8E8"
+            android:textColorHint="#555555"
+            android:textSize="13sp"
+            android:typeface="monospace" />
+
+        <ImageButton
+            android:id="@+id/ft_send"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_send"
+            android:contentDescription="发送" />
+    </LinearLayout>
+</LinearLayout>

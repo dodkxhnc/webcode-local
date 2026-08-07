@@ -242,6 +242,17 @@ class LocalSetupActivity : AppCompatActivity() {
             }
         }
 
+        // ===== 终端小窗（开发中） =====
+        findViewById<View>(R.id.term_float_btn).setOnClickListener {
+            com.webcode.app.termux.PixelOverlay.requestOverlayPermissionIfNeeded(this)
+            if (android.provider.Settings.canDrawOverlays(this)) {
+                com.webcode.app.termux.FloatingTerminalService.start(this)
+                Toast.makeText(this, "终端小窗已开启：点击悬浮球展开", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "请在系统设置中允许悬浮窗后重新点击", Toast.LENGTH_LONG).show()
+            }
+        }
+
         // ===== 手动检查更新 =====
         val checkBtn = findViewById<Button>(R.id.check_update_btn)
         checkBtn.text = "检查更新（当前 v${com.webcode.app.BuildConfig.VERSION_NAME} · 每次启动自动检查）"

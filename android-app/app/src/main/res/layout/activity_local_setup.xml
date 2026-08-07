@@ -448,6 +448,15 @@
                 android:textColor="@color/text" />
 
             <Button
+                android:id="@+id/term_float_btn"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:backgroundTint="@color/panel3"
+                android:text="终端小窗（开发中 · 悬浮终端）"
+                android:textColor="@color/text" />
+
+            <Button
                 android:id="@+id/check_update_btn"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
