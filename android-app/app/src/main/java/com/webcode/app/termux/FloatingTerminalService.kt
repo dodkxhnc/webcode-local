@@ -57,6 +57,7 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
     private var session: TerminalSession? = null
     private var process: Process? = null
     private var ptyFd = -1
+    private var panelInput: EditText? = null
 
     private var lastX = 0f
     private var lastY = 0f
@@ -180,6 +181,41 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
         }
     }
 
+    /** 焦点协调：输入框或 tty 任一获得焦点 → 窗口可聚焦；全部失焦 → 恢复不抢焦点 */
+    private fun updateFocusFlags() {
+        try {
+            val focused = (terminalView?.hasFocus() == true) || (panelInput?.hasFocus() == true)
+            val lp = panelParams ?: return
+            val newFlags = if (focused) {
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+            } else {
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            }
+            if (lp.flags != newFlags) {
+                lp.flags = newFlags
+                panelView?.let { wm?.updateViewLayout(it, lp) }
+            }
+        } catch (e: Exception) {
+        }
+    }
+
+    private fun requestFocusOn(view: View?) {
+        view?.let { v ->
+            updateFocusFlags()
+            v.requestFocus()
+            v.post {
+                updateFocusFlags()
+                v.requestFocus()
+                try {
+                    val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                            as android.view.inputmethod.InputMethodManager
+                    imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                } catch (e: Exception) {
+                }
+            }
+        }
+    }
+
     private fun togglePanel() {
         if (panelView != null) removePanel() else showPanel()
     }
@@ -246,44 +282,22 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
             // 输入
             val input = view.findViewById<EditText>(R.id.ft_input)
+            panelInput = input
             // NOT_FOCUSABLE 窗口内 EditText 无法直接获得焦点：按下时先切窗口 flag，抬起后聚焦 + 弹键盘（post 重试）
             input.setOnTouchListener { v, ev ->
                 when (ev.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        try {
-                            params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                            wm?.updateViewLayout(view, params)
-                        } catch (e: Exception) {
-                        }
+                        updateFocusFlags()
                         true
                     }
                     MotionEvent.ACTION_UP -> {
-                        v.requestFocus()
-                        v.post {
-                            v.requestFocus()
-                            try {
-                                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
-                                        as android.view.inputmethod.InputMethodManager
-                                imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-                            } catch (e: Exception) {
-                            }
-                        }
+                        requestFocusOn(v)
                         true
                     }
                     else -> true
                 }
             }
-            input.setOnFocusChangeListener { _, hasFocus ->
-                try {
-                    params.flags = if (hasFocus) {
-                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                    } else {
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                    }
-                    wm?.updateViewLayout(view, params)
-                } catch (e: Exception) {
-                }
-            }
+            input.setOnFocusChangeListener { _, _ -> updateFocusFlags() }
             view.findViewById<View>(R.id.ft_send).setOnClickListener { sendCommand(input) }
             input.setOnEditorActionListener { _, _, _ ->
                 sendCommand(input)
@@ -464,6 +478,7 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
             tv.setFocusable(true)
             tv.setFocusableInTouchMode(true)
             tv.setTextSize(13)
+            tv.setOnFocusChangeListener { _, _ -> updateFocusFlags() }
             tv.attachSession(s)
 
             this.terminalView = tv
@@ -488,14 +503,8 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
     private val termViewClient = object : TerminalViewClient {
         override fun onSingleTapUp(e: MotionEvent) {
-            val tv = terminalView ?: return
-            tv.requestFocus()
-            try {
-                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
-                        as android.view.inputmethod.InputMethodManager
-                imm.showSoftInput(tv, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
-            } catch (ex: Exception) {
-            }
+            // 点击 tty：切换窗口可聚焦后请求焦点 + 弹键盘（NOT_FOCUSABLE 窗口内 requestFocus 无效）
+            requestFocusOn(terminalView)
         }
 
         override fun shouldBackButtonBeMappedToEscape(): Boolean = false
