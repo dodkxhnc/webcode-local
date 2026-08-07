@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#101010">
+    android:background="@drawable/bg_float_terminal">
 
     <LinearLayout
         android:id="@+id/term_panel_header"
@@ -42,7 +42,8 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="#000000" />
+        android:background="#000000"
+        android:padding="2dp" />
 
     <!-- 扩展键（精简） -->
     <HorizontalScrollView
@@ -133,5 +134,15 @@
             android:background="@android:color/transparent"
             android:src="@drawable/ic_send"
             android:contentDescription="发送" />
+
+        <TextView
+            android:id="@+id/ft_resize"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginStart="2dp"
+            android:gravity="center"
+            android:text="◢"
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

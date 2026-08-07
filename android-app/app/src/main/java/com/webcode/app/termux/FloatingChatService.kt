@@ -295,7 +295,9 @@ class FloatingChatService : Service(), ChatListener {
             val params = WindowManager.LayoutParams(
                 w, h,
                 overlayType(),
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, // 面板外点击穿透到下层，不挡后面的界面
+                // 默认不抢焦点（否则聊天时小窗会抢走主界面输入焦点）；
+                // 输入框聚焦时由 onFocusChange 临时移除该 flag
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             )
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
@@ -317,6 +319,18 @@ class FloatingChatService : Service(), ChatListener {
             chatList = view.findViewById(R.id.float_chat_list)
             titleText = view.findViewById(R.id.float_title)
             inputBox = view.findViewById(R.id.float_input)
+            // 输入框聚焦时才允许窗口获得焦点（弹键盘），失焦恢复不抢焦点
+            inputBox?.setOnFocusChangeListener { _, hasFocus ->
+                try {
+                    params.flags = if (hasFocus) {
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                    } else {
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    }
+                    wm?.updateViewLayout(view, params)
+                } catch (e: Exception) {
+                }
+            }
             adapter = ChatAdapter(this, this, messages)
             chatList!!.layoutManager = LinearLayoutManager(this)
             chatList!!.adapter = adapter

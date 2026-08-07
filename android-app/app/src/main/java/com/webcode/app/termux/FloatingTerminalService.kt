@@ -193,7 +193,8 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
             val params = WindowManager.LayoutParams(
                 w, h,
                 overlayType(),
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                // 默认不抢焦点（否则干扰主界面输入），输入框聚焦时临时恢复
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT
             )
             params.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
@@ -245,11 +246,25 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
             // 输入
             val input = view.findViewById<EditText>(R.id.ft_input)
+            input.setOnFocusChangeListener { _, hasFocus ->
+                try {
+                    params.flags = if (hasFocus) {
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                    } else {
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                    }
+                    wm?.updateViewLayout(view, params)
+                } catch (e: Exception) {
+                }
+            }
             view.findViewById<View>(R.id.ft_send).setOnClickListener { sendCommand(input) }
             input.setOnEditorActionListener { _, _, _ ->
                 sendCommand(input)
                 true
             }
+
+            // 缩放手柄
+            setupResizeHandle(view)
 
             // 拖动
             view.findViewById<View>(R.id.term_panel_header).setOnTouchListener { v, event ->
@@ -290,6 +305,42 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
         }
         panelView = null
         panelParams = null
+    }
+
+    /** 右下角 ◢ 缩放手柄：调整面板窗口大小 */
+    private fun setupResizeHandle(panel: View) {
+        val handle = panel.findViewById<View>(R.id.ft_resize)
+        var startX = 0f
+        var startY = 0f
+        var startW = 0
+        var startH = 0
+        handle.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    startX = event.rawX
+                    startY = event.rawY
+                    val lp = panelParams
+                    if (lp != null) {
+                        startW = lp.width
+                        startH = lp.height
+                    }
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val lp = panelParams ?: return@setOnTouchListener true
+                    val dx = (event.rawX - startX).toInt()
+                    val dy = (event.rawY - startY).toInt()
+                    lp.width = (startW + dx).coerceIn(dp(240), dp(560))
+                    lp.height = (startH + dy).coerceIn(dp(300), dp(900))
+                    try {
+                        panelView?.let { wm?.updateViewLayout(it, lp) }
+                    } catch (e: Exception) {
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
     }
 
     /* ============ 终端会话（与全屏一致） ============ */
@@ -437,7 +488,8 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
     /* ============ 输入 ============ */
     private fun sendCommand(input: EditText) {
-        val text = input.text.toString()
+        // 清理输入框文本末尾可能残留的换行/回车，避免与追加的 \n 叠加导致换行两次
+        val text = input.text.toString().trimEnd('\n', '\r')
         if (text.isBlank()) return
         val s = session ?: return
         input.setText("")
