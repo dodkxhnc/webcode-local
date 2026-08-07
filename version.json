@@ -1,6 +1,6 @@
 {
-  "versionCode": 15,
-  "versionName": "v3.1-beta.13",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.13/WebCode-Android-v3.1-beta.13.apk",
-  "notes": "修复：终端小窗面板 inflate 崩溃（MaterialCardView 换 androidx CardView，兼容 AppCompat 主题）。"
+  "versionCode": 16,
+  "versionName": "v3.1-beta.14",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.14/WebCode-Android-v3.1-beta.14.apk",
+  "notes": "修复：终端小窗点击 tty 无法聚焦输入（统一焦点协调：点 tty/输入框自动切可聚焦，失焦恢复）。"
 }
