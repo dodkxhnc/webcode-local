@@ -1,6 +1,6 @@
 {
-  "versionCode": 12,
-  "versionName": "v3.1-beta.10",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.10/WebCode-Android-v3.1-beta.10.apk",
-  "notes": "修复：小窗抢焦点（默认不聚焦，输入时临时聚焦）、终端小窗换行两次、圆角化、支持缩放、字体边界。"
+  "versionCode": 13,
+  "versionName": "v3.1-beta.11",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.11/WebCode-Android-v3.1-beta.11.apk",
+  "notes": "修复：终端小窗输入框无法聚焦（触摸切换窗口 flag）、圆角被内部元素盖住（clipToOutline）、缩放防抖不再莫名换行。"
 }
