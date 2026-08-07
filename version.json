@@ -1,6 +1,6 @@
 {
-  "versionCode": 13,
-  "versionName": "v3.1-beta.11",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.11/WebCode-Android-v3.1-beta.11.apk",
-  "notes": "修复：终端小窗输入框无法聚焦（触摸切换窗口 flag）、圆角被内部元素盖住（clipToOutline）、缩放防抖不再莫名换行。"
+  "versionCode": 14,
+  "versionName": "v3.1-beta.12",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.12/WebCode-Android-v3.1-beta.12.apk",
+  "notes": "修复：终端小窗圆角（MaterialCardView 裁剪）、小窗输入框焦点（按下切 flag + 抬起聚焦重试）。"
 }
