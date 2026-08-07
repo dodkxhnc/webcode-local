@@ -246,23 +246,32 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
 
             // 输入
             val input = view.findViewById<EditText>(R.id.ft_input)
-            // NOT_FOCUSABLE 窗口内 EditText 无法直接获得焦点，改为触摸时手动切换窗口 flag 再聚焦
+            // NOT_FOCUSABLE 窗口内 EditText 无法直接获得焦点：按下时先切窗口 flag，抬起后聚焦 + 弹键盘（post 重试）
             input.setOnTouchListener { v, ev ->
-                if (ev.action == MotionEvent.ACTION_UP) {
-                    try {
-                        params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        wm?.updateViewLayout(view, params)
-                    } catch (e: Exception) {
+                when (ev.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        try {
+                            params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            wm?.updateViewLayout(view, params)
+                        } catch (e: Exception) {
+                        }
+                        true
                     }
-                    v.requestFocus()
-                    try {
-                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
-                                as android.view.inputmethod.InputMethodManager
-                        imm.showSoftInput(v, 0)
-                    } catch (e: Exception) {
+                    MotionEvent.ACTION_UP -> {
+                        v.requestFocus()
+                        v.post {
+                            v.requestFocus()
+                            try {
+                                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                                        as android.view.inputmethod.InputMethodManager
+                                imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                            } catch (e: Exception) {
+                            }
+                        }
+                        true
                     }
+                    else -> true
                 }
-                true
             }
             input.setOnFocusChangeListener { _, hasFocus ->
                 try {

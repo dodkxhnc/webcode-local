@@ -320,23 +320,32 @@ class FloatingChatService : Service(), ChatListener {
             titleText = view.findViewById(R.id.float_title)
             inputBox = view.findViewById(R.id.float_input)
             // 输入框聚焦时才允许窗口获得焦点（弹键盘），失焦恢复不抢焦点。
-            // 注意：NOT_FOCUSABLE 窗口内 EditText 无法直接聚焦，须触摸时先切换窗口 flag
+            // 注意：NOT_FOCUSABLE 窗口内 EditText 无法直接聚焦，按下时先切换窗口 flag，抬起后聚焦+弹键盘
             inputBox?.setOnTouchListener { v, ev ->
-                if (ev.action == MotionEvent.ACTION_UP) {
-                    try {
-                        params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        wm?.updateViewLayout(view, params)
-                    } catch (e: Exception) {
+                when (ev.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        try {
+                            params.flags = WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            wm?.updateViewLayout(view, params)
+                        } catch (e: Exception) {
+                        }
+                        true
                     }
-                    v.requestFocus()
-                    try {
-                        val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
-                                as android.view.inputmethod.InputMethodManager
-                        imm.showSoftInput(v, 0)
-                    } catch (e: Exception) {
+                    MotionEvent.ACTION_UP -> {
+                        v.requestFocus()
+                        v.post {
+                            v.requestFocus()
+                            try {
+                                val imm = getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                                        as android.view.inputmethod.InputMethodManager
+                                imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                            } catch (e: Exception) {
+                            }
+                        }
+                        true
                     }
+                    else -> true
                 }
-                true
             }
             inputBox?.setOnFocusChangeListener { _, hasFocus ->
                 try {
