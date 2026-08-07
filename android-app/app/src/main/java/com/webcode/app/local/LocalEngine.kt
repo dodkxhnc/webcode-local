@@ -43,6 +43,7 @@ class LocalEngine(context: Context) : ChatEngine {
     private val pendingQuestions = ConcurrentHashMap<String, (String) -> Unit>()
     private val pendingApprovals = ConcurrentHashMap<String, CompletableFuture<Boolean>>()
     private val abort = AtomicBoolean(false)
+    @Volatile
     private var running = false
     private var currentSessionId: String? = null
     @Volatile

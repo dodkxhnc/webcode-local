@@ -138,6 +138,7 @@ class FloatingChatService : Service(), ChatListener {
     private var items = JSONArray()
     private val messages = mutableListOf<SessionMessage>()
     private val abort = AtomicBoolean(false)
+    @Volatile
     private var running = false
 
     override fun onBind(intent: Intent?): IBinder? = null

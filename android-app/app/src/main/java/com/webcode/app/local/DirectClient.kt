@@ -70,7 +70,7 @@ class DirectClient(
             conn = URL("${baseUrl.trimEnd('/')}/v1/responses").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
             conn.connectTimeout = 20_000
-            conn.readTimeout = 300_000
+            conn.readTimeout = 5_000
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/json")
             conn.setRequestProperty("Authorization", "Bearer $apiKey")
@@ -96,7 +96,15 @@ class DirectClient(
                 if (abort.get()) {
                     return StreamResult(false, finalResponse, "已中止")
                 }
-                val line = reader.readLine() ?: break
+                val line = try {
+                    reader.readLine()
+                } catch (e: java.net.SocketTimeoutException) {
+                    // readTimeout 用于让 abort 及时生效：服务端暂停发数据时每 5s 醒来检查一次
+                    if (abort.get()) {
+                        return StreamResult(false, finalResponse, "已中止")
+                    }
+                    continue
+                } ?: break
                 if (line.isEmpty()) {
                     val block = buffer.toString()
                     buffer = StringBuilder()

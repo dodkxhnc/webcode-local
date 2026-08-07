@@ -243,13 +243,14 @@ class LocalSetupActivity : AppCompatActivity() {
         }
 
         // ===== 手动检查更新 =====
-        findViewById<View>(R.id.check_update_btn).setOnClickListener {
-            val btn = findViewById<Button>(R.id.check_update_btn)
-            btn.isEnabled = false
+        val checkBtn = findViewById<Button>(R.id.check_update_btn)
+        checkBtn.text = "检查更新（当前 v${com.webcode.app.BuildConfig.VERSION_NAME} · 每次启动自动检查）"
+        checkBtn.setOnClickListener {
+            checkBtn.isEnabled = false
             Toast.makeText(this, "正在检查更新…", Toast.LENGTH_SHORT).show()
             com.webcode.app.local.UpdateChecker.checkLatest { info ->
                 runOnUiThread {
-                    btn.isEnabled = true
+                    checkBtn.isEnabled = true
                     if (info == null) {
                         Toast.makeText(this, "检查更新失败：无法连接仓库（请检查网络）", Toast.LENGTH_LONG).show()
                     } else if (info.versionCode <= BuildConfig.VERSION_CODE) {
