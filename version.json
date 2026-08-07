@@ -1,6 +1,6 @@
 {
-  "versionCode": 10,
-  "versionName": "v3.1-beta.8",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.8/WebCode-Android-v3.1-beta.8.apk",
-  "notes": "修复：中断无效（running 加 volatile + SSE 读取 5s 超时响应 abort）。"
+  "versionCode": 11,
+  "versionName": "v3.1-beta.9",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.9/WebCode-Android-v3.1-beta.9.apk",
+  "notes": "🚧 开发中：新增终端小窗（悬浮终端，与全屏终端同 UI）；其余为 beta.8 修复。"
 }
