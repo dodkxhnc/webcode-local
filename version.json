@@ -1,6 +1,6 @@
 {
-  "versionCode": 11,
-  "versionName": "v3.1-beta.9",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.9/WebCode-Android-v3.1-beta.9.apk",
-  "notes": "🚧 开发中：新增终端小窗（悬浮终端，与全屏终端同 UI）；其余为 beta.8 修复。"
+  "versionCode": 12,
+  "versionName": "v3.1-beta.10",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.10/WebCode-Android-v3.1-beta.10.apk",
+  "notes": "修复：小窗抢焦点（默认不聚焦，输入时临时聚焦）、终端小窗换行两次、圆角化、支持缩放、字体边界。"
 }
