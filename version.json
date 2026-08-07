@@ -1,6 +1,6 @@
 {
-  "versionCode": 9,
-  "versionName": "v3.1-beta.7",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.7/WebCode-Android-v3.1-beta.7.apk",
-  "notes": "修复：立即安装闪退（补充 REQUEST_INSTALL_PACKAGES 权限声明）。"
+  "versionCode": 10,
+  "versionName": "v3.1-beta.8",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.8/WebCode-Android-v3.1-beta.8.apk",
+  "notes": "修复：中断无效（running 加 volatile + SSE 读取 5s 超时响应 abort）。"
 }
