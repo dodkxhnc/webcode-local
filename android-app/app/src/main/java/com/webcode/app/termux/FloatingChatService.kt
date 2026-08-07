@@ -1058,21 +1058,27 @@ class FloatingChatService : Service(), ChatListener {
                 "tty_read" -> {
                     if (!com.webcode.app.local.LocalEngine.ttyAccess(this)) {
                         "未授权：请在设置中开启「允许 AI 读取/注入终端」"
-                    } else if (com.webcode.app.ui.TerminalActivity.current() == null) {
-                        "当前未打开终端页面，无法读取 tty"
-                    } else {
+                    } else if (com.webcode.app.ui.TerminalActivity.current() != null) {
                         com.webcode.app.ui.TerminalActivity.readTty(maxLines = args.optInt("lines", 200))
                             ?: "读取终端失败"
+                    } else if (com.webcode.app.termux.FloatingTerminalService.current() != null) {
+                        com.webcode.app.termux.FloatingTerminalService.readTty(maxLines = args.optInt("lines", 200))
+                            ?: "读取终端失败"
+                    } else {
+                        "当前未打开终端页面（全屏终端或终端小窗），无法读取 tty"
                     }
                 }
                 "tty_read_raw" -> {
                     if (!com.webcode.app.local.LocalEngine.ttyAccess(this)) {
                         "未授权：请在设置中开启「允许 AI 读取/注入终端」"
-                    } else if (com.webcode.app.ui.TerminalActivity.current() == null) {
-                        "当前未打开终端页面，无法读取 tty"
-                    } else {
+                    } else if (com.webcode.app.ui.TerminalActivity.current() != null) {
                         com.webcode.app.ui.TerminalActivity.readTtyRaw()
                             ?: "读取终端失败"
+                    } else if (com.webcode.app.termux.FloatingTerminalService.current() != null) {
+                        com.webcode.app.termux.FloatingTerminalService.readTtyRaw()
+                            ?: "读取终端失败"
+                    } else {
+                        "当前未打开终端页面（全屏终端或终端小窗），无法读取 tty"
                     }
                 }
                 "tty_send" -> {
@@ -1081,9 +1087,15 @@ class FloatingChatService : Service(), ChatListener {
                     } else {
                         val cmd = args.optString("command", "")
                         if (cmd.isEmpty()) "命令为空"
-                        else if (com.webcode.app.ui.TerminalActivity.current() == null) "当前未打开终端页面，无法注入 tty"
-                        else if (com.webcode.app.ui.TerminalActivity.writeTty(cmd)) "已注入终端并执行：$cmd"
-                        else "注入终端失败"
+                        else if (com.webcode.app.ui.TerminalActivity.current() != null) {
+                            if (com.webcode.app.ui.TerminalActivity.writeTty(cmd)) "已注入终端并执行：$cmd"
+                            else "注入终端失败"
+                        } else if (com.webcode.app.termux.FloatingTerminalService.current() != null) {
+                            if (com.webcode.app.termux.FloatingTerminalService.writeTty(cmd)) "已注入终端并执行：$cmd"
+                            else "注入终端失败"
+                        } else {
+                            "当前未打开终端页面（全屏终端或终端小窗），无法注入 tty"
+                        }
                     }
                 }
                 else -> "未知工具: $name"
