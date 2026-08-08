@@ -143,6 +143,10 @@ class LocalEngine(context: Context) : ChatEngine {
 
         // 会话
         val sid = if (sessionId != null && store.get(sessionId) != null) sessionId else {
+            com.webcode.app.termux.DiagLog.log(
+                appContext, "Engine",
+                "start: 会话 ${sessionId ?: "null"} 不可用，新建会话（可能上次崩溃/损坏）"
+            )
             store.create(content.take(30)).id
         }
         currentSessionId = sid
