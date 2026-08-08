@@ -278,7 +278,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="原生 root 模式（需手机已 root：root 身份运行 + 挂载手机根目录到 /mnt/root）"
+                android:text="原生 root 模式（需手机已 root：root 身份运行命令，外部路径真实挂载到 /mnt/external）"
                 android:textColor="@color/text"
                 android:textSize="13sp" />
 
