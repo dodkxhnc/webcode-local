@@ -299,6 +299,50 @@ object TermuxRuntime {
             }
         }
 
+    /**
+     * root 模式：用 root 权限真实挂载外部路径到 rootfs（mount --bind）。
+     * 后台线程执行 + 5s 超时：su 授权弹窗等场景绝不能阻塞调用线程（否则 UI 线程 ANR）。
+     * 返回挂载成功数（仅用于诊断，失败不阻断 proot 启动）。
+     */
+    fun mountExternalWithRoot(rootfsRoot: File, mounts: List<String>, onLog: (String) -> Unit = {}): Int {
+        if (mounts.isEmpty()) return 0
+        var ok = 0
+        for ((idx, mp) in mounts.withIndex()) {
+            val src = java.io.File(mp)
+            if (!src.exists()) {
+                onLog("挂载跳过（不存在）：$mp")
+                continue
+            }
+            val guestPath = if (idx == 0) "/mnt/external" else "/mnt/external-$idx"
+            val targetDir = java.io.File(rootfsRoot, guestPath.trimStart('/'))
+            targetDir.mkdirs()
+            val done = java.util.concurrent.CountDownLatch(1)
+            Thread {
+                try {
+                    val p = Runtime.getRuntime().exec(
+                        arrayOf("su", "-c", "mount --bind '${src.absolutePath}' '${targetDir.absolutePath}'")
+                    )
+                    val err = p.errorStream.bufferedReader().readText()
+                    val finished = p.waitFor(5000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    if (finished && p.exitValue() == 0) {
+                        ok++
+                    } else {
+                        onLog("挂载失败 $mp → $guestPath：${err.trim().ifEmpty { "exit ${p.exitValue()}" }}")
+                    }
+                } catch (e: Exception) {
+                    onLog("挂载异常 $mp：${e.message}")
+                } finally {
+                    done.countDown()
+                }
+            }.start()
+            try {
+                done.await(6000, java.util.concurrent.TimeUnit.MILLISECONDS)
+            } catch (e: Exception) {
+            }
+        }
+        return ok
+    }
+
     private fun copyAssetTo(asset: String, target: File) {
         target.parentFile?.mkdirs()
         appContext.assets.open(asset).use { input ->
