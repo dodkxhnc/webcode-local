@@ -497,7 +497,8 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
             val startArgs: List<String>
             if (rootMode) {
                 TermuxRuntime.mountExternalWithRoot(root, com.webcode.app.local.LocalEngine.mountPaths(this))
-                startArgs = listOf("su", "-c", "exec " + TermuxRuntime.buildCmdLine(args))
+                // su 清空环境变量：显式 export LD_LIBRARY_PATH 等，否则 proot 找不到 libtalloc.so.2
+                startArgs = TermuxRuntime.rootSuStartArgs(env, args)
             } else {
                 startArgs = args
             }
