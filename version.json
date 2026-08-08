@@ -1,6 +1,6 @@
 {
-  "versionCode": 17,
-  "versionName": "v3.1-beta.15",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.15/WebCode-Android-v3.1-beta.15.apk",
-  "notes": "修复：终端小窗也视为打开的 tty（AI tty_read/raw/send 全屏优先、小窗兜底）。"
+  "versionCode": 18,
+  "versionName": "v3.1-beta.16",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.16/WebCode-Android-v3.1-beta.16.apk",
+  "notes": "新增：原生 root 模式（su 运行 + 挂载手机根目录到 /mnt/root）。修复：历史对话 JSON 损坏自动恢复（.broken 备份）。"
 }
