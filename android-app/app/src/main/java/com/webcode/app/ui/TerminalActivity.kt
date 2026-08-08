@@ -71,7 +71,8 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
         val terminalView: TerminalView,
         val session: TerminalSession,
         val process: Process,
-        val ptyFd: Int
+        val ptyFd: Int,
+        val createdAt: Long = System.currentTimeMillis()
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -302,20 +303,7 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
             val rootMode = com.webcode.app.local.LocalEngine.rootMode(this)
             val startArgs: List<String>
             if (rootMode) {
-                val mounts = com.webcode.app.local.LocalEngine.mountPaths(this)
-                for ((idx, mp) in mounts.withIndex()) {
-                    val src = java.io.File(mp)
-                    if (!src.exists()) continue
-                    val guestPath = if (idx == 0) "/mnt/external" else "/mnt/external-$idx"
-                    val targetDir = java.io.File(root, guestPath.trimStart('/'))
-                    targetDir.mkdirs()
-                    try {
-                        Runtime.getRuntime().exec(
-                            arrayOf("su", "-c", "mount --bind '${src.absolutePath}' '${targetDir.absolutePath}'")
-                        ).waitFor()
-                    } catch (e: Exception) {
-                    }
-                }
+                TermuxRuntime.mountExternalWithRoot(root, com.webcode.app.local.LocalEngine.mountPaths(this))
                 startArgs = listOf("su", "-c", "exec " + TermuxRuntime.buildCmdLine(args))
             } else {
                 startArgs = args
@@ -525,13 +513,25 @@ class TerminalActivity : AppCompatActivity(), TerminalSessionClient {
     override fun onSessionFinished(finishedSession: TerminalSession) {
         runOnUiThread {
             val h = sessions.find { it.session === finishedSession } ?: return@runOnUiThread
+            // 异常检测：会话存活过短说明启动即崩溃（rootfs/权限/系统限制），提示而非静默重建
+            val shortLived = System.currentTimeMillis() - h.createdAt < 10_000
             h.terminalView.post {
-                android.widget.Toast.makeText(this, "会话 ${h.id} 已结束（长按会话名删除）", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(
+                    this,
+                    if (shortLived) "终端异常退出（可能是 rootfs 或系统限制），点击 ＋ 手动新建"
+                    else "会话 ${h.id} 已结束（长按会话名删除）",
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
             frame?.removeView(h.terminalView)
             sessions.remove(h)
             renderSessionBar()
-            if (sessions.isEmpty()) newSession() else switchSession(sessions.last().id)
+            // 不再自动重建：避免"崩溃 → 自动新建 → 又崩溃"的死循环
+            if (sessions.isEmpty()) {
+                inputView.post { inputView.clearFocus() }
+            } else {
+                switchSession(sessions.last().id)
+            }
         }
     }
 
