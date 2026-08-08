@@ -1,6 +1,6 @@
 {
-  "versionCode": 20,
-  "versionName": "v3.1-beta.18",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.18/WebCode-Android-v3.1-beta.18.apk",
-  "notes": "修复：session 疯狂增长（终端会话结束不再自动重建、root 模式 mount 移后台+超时防 ANR、保底创建加诊断日志）。"
+  "versionCode": 21,
+  "versionName": "v3.1-beta.19",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.19/WebCode-Android-v3.1-beta.19.apk",
+  "notes": "修复：proot 安装 ETXTBSY（组件存在即跳过覆盖，避免写运行中二进制）。"
 }
