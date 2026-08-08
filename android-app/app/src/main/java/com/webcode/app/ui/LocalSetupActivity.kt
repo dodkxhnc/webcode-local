@@ -84,6 +84,18 @@ class LocalSetupActivity : AppCompatActivity() {
             com.webcode.app.local.LocalEngine.setTtyAccess(this, checked)
         }
 
+        // ===== 原生 root 模式 =====
+        val rootModeCb = findViewById<android.widget.CheckBox>(R.id.root_mode_cb)
+        rootModeCb.isChecked = com.webcode.app.local.LocalEngine.rootMode(this)
+        rootModeCb.setOnCheckedChangeListener { _, checked ->
+            if (checked && !com.webcode.app.local.LocalEngine.isRootAvailable()) {
+                Toast.makeText(this, "未检测到 root 权限（su），无法开启 root 模式", Toast.LENGTH_LONG).show()
+                rootModeCb.isChecked = false
+            } else {
+                com.webcode.app.local.LocalEngine.setRootMode(this, checked)
+            }
+        }
+
         // ===== 外部路径挂载 =====
         val mountCb = findViewById<android.widget.CheckBox>(R.id.mount_cb)
         val mountPanel = findViewById<View>(R.id.mount_panel)
