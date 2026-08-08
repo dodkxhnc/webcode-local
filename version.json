@@ -1,6 +1,6 @@
 {
-  "versionCode": 18,
-  "versionName": "v3.1-beta.16",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.16/WebCode-Android-v3.1-beta.16.apk",
-  "notes": "新增：原生 root 模式（su 运行 + 挂载手机根目录到 /mnt/root）。修复：历史对话 JSON 损坏自动恢复（.broken 备份）。"
+  "versionCode": 19,
+  "versionName": "v3.1-beta.17",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.17/WebCode-Android-v3.1-beta.17.apk",
+  "notes": "修复：不再自动疯狂创建会话；root 模式改为 su mount --bind 真实挂载外部路径到 /mnt/external。"
 }
