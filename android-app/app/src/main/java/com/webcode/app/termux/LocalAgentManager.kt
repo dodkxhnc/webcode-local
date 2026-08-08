@@ -254,8 +254,23 @@ object LocalAgentManager {
         env["ANDROID_ROOT"] = System.getenv("ANDROID_ROOT") ?: "/system"
         env["ANDROID_DATA"] = System.getenv("ANDROID_DATA") ?: "/data"
 
+        // 原生 root 模式：以 root 身份运行 proot，并挂载手机根目录到 rootfs /mnt/root
+        // （这样 rootfs 内可访问整个手机文件系统，含受保护目录）
+        val rootMode = com.webcode.app.local.LocalEngine.rootMode(context)
+        val startArgs: List<String>
+        if (rootMode) {
+            try {
+                java.io.File(root, "mnt/root").mkdirs()
+            } catch (e: Exception) {
+            }
+            args.add("-b"); args.add("/:/mnt/root")
+            startArgs = listOf("su", "-c", "exec " + TermuxRuntime.buildCmdLine(args))
+        } else {
+            startArgs = args
+        }
+
         return try {
-            val pb = ProcessBuilder(args)
+            val pb = ProcessBuilder(startArgs)
             pb.environment().putAll(env)
             val p = pb.redirectErrorStream(true).start()
             // 关键修复：readBytes() 会无限阻塞直到进程退出（长命令/apt update 时工具永久卡住），
