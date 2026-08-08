@@ -37,9 +37,36 @@ class LocalStore(context: Context) {
             try {
                 parseSessionMeta(metaOf(JSONObject(f.readText())))
             } catch (e: Exception) {
-                null
+                // JSON 损坏（历史版本非原子写残留等）：备份损坏文件并重建最小会话，
+                // 保证历史对话仍显示在列表（原数据保留在 .broken 备份中）
+                repairBrokenFile(f)
+                try {
+                    val name = f.name.removeSuffix(".json")
+                    parseSessionMeta(metaOf(JSONObject().put("id", name).put("title", "（恢复的会话）")))
+                } catch (e2: Exception) {
+                    null
+                }
             }
         }?.sortedByDescending { it.updatedAt } ?: emptyList()
+
+    /** 损坏 JSON 备份为 .broken（保留原始数据），原文件重建为空会话 */
+    private fun repairBrokenFile(f: File) {
+        try {
+            val broken = File(dir, f.name.replace(".json", ".json.broken"))
+            if (!broken.exists()) {
+                f.copyTo(broken, overwrite = true)
+            }
+            val doc = JSONObject()
+                .put("id", f.name.removeSuffix(".json"))
+                .put("title", "（恢复的会话）")
+                .put("createdAt", System.currentTimeMillis())
+                .put("updatedAt", System.currentTimeMillis())
+                .put("items", JSONArray())
+                .put("messages", JSONArray())
+            atomicWrite(f, doc.toString(2))
+        } catch (e: Exception) {
+        }
+    }
 
     private fun metaOf(doc: JSONObject): JSONObject {
         val meta = JSONObject()
