@@ -510,6 +510,8 @@ class MainActivity : AppCompatActivity(), ChatListener {
                 runOnUiThread {
                     if (s == null) {
                         Toast.makeText(this, "会话不存在", Toast.LENGTH_SHORT).show()
+                        // 复位无效会话 id，避免后续发消息反复创建新会话
+                        activeId = null
                         return@runOnUiThread
                     }
                     activeId = s.id
