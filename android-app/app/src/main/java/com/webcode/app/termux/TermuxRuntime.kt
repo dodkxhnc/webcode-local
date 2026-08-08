@@ -81,14 +81,15 @@ object TermuxRuntime {
             val arch = archName()
             val target = File(binDir, "proot")
             val assetName = "termux/proot-$arch"
-            copyAssetTo(assetName, target)
-            copyAssetTo("termux/libtalloc.so.2-$arch", File("$prefixDir/lib", "libtalloc.so.2"))
-            copyAssetTo("termux/libandroid-shmem.so-$arch", File("$prefixDir/lib", "libandroid-shmem.so"))
+            // 组件存在即跳过：覆盖运行中的二进制会报 ETXTBSY（Text file busy）
+            copyIfNeeded(assetName, target)
+            copyIfNeeded("termux/libtalloc.so.2-$arch", File("$prefixDir/lib", "libtalloc.so.2"))
+            copyIfNeeded("termux/libandroid-shmem.so-$arch", File("$prefixDir/lib", "libandroid-shmem.so"))
             // 源码编译的静态 loader（避免运行时解压内嵌 loader 的 noexec/临时目录问题）
             File("$prefixDir/libexec/proot").mkdirs()
-            copyAssetTo("termux/loader-$arch", File("$prefixDir/libexec/proot", "loader"))
+            copyIfNeeded("termux/loader-$arch", File("$prefixDir/libexec/proot", "loader"))
             try {
-                copyAssetTo("termux/loader32-$arch", File("$prefixDir/libexec/proot", "loader32"))
+                copyIfNeeded("termux/loader32-$arch", File("$prefixDir/libexec/proot", "loader32"))
             } catch (e: Exception) {
             }
             // 关键：proot 和 loader 都必须可执行（assets 拷出默认 0644，不 chmod 会导致 execve Permission denied）
@@ -115,6 +116,16 @@ object TermuxRuntime {
         } catch (e: Exception) {
             writeDiag("proot 安装异常: ${e.message ?: e.javaClass.simpleName}")
         }
+    }
+
+    /** 组件存在且非空则跳过拷贝；覆盖前先删除（避免 ETXTBSY） */
+    private fun copyIfNeeded(asset: String, target: File) {
+        if (target.exists() && target.length() > 0) return
+        try {
+            target.delete()
+        } catch (e: Exception) {
+        }
+        copyAssetTo(asset, target)
     }
 
     private fun writeDiag(msg: String) {
