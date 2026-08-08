@@ -311,6 +311,17 @@ object TermuxRuntime {
         }
 
     /**
+     * root 模式启动参数：su 会清空环境变量，必须把 LD_LIBRARY_PATH（libtalloc 等）
+     * 与其他关键环境变量显式 export 进 su -c 命令串，否则 proot 报 libtalloc.so.2 不存在。
+     */
+    fun rootSuStartArgs(env: Map<String, String>, args: List<String>): List<String> {
+        val exports = env.entries.joinToString("; ") { (k, v) ->
+            "export $k='${v.replace("'", "'\\''")}'"
+        }
+        return listOf("su", "-c", "$exports; exec " + buildCmdLine(args))
+    }
+
+    /**
      * root 模式：用 root 权限真实挂载外部路径到 rootfs（mount --bind）。
      * 后台线程执行 + 5s 超时：su 授权弹窗等场景绝不能阻塞调用线程（否则 UI 线程 ANR）。
      * 返回挂载成功数（仅用于诊断，失败不阻断 proot 启动）。
