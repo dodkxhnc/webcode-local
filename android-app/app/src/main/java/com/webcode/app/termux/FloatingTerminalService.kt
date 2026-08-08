@@ -492,7 +492,21 @@ class FloatingTerminalService : Service(), TerminalSessionClient {
             env["PROOT_LOADER_32"] = TermuxRuntime.prefixDir + "/libexec/proot/loader32"
             env["LD_LIBRARY_PATH"] = TermuxRuntime.prefixDir + "/lib"
 
-            val pb = ProcessBuilder(args)
+            // 原生 root 模式：以 root 身份运行 proot + 挂载手机根目录到 /mnt/root
+            val rootMode = com.webcode.app.local.LocalEngine.rootMode(this)
+            val startArgs: List<String>
+            if (rootMode) {
+                try {
+                    java.io.File(root, "mnt/root").mkdirs()
+                } catch (e: Exception) {
+                }
+                args.add("-b"); args.add("/:/mnt/root")
+                startArgs = listOf("su", "-c", "exec " + TermuxRuntime.buildCmdLine(args))
+            } else {
+                startArgs = args
+            }
+
+            val pb = ProcessBuilder(startArgs)
             pb.environment().putAll(env)
             pb.redirectErrorStream(true)
             val p = pb.start()
