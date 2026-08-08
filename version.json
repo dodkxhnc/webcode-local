@@ -1,6 +1,6 @@
 {
-  "versionCode": 21,
-  "versionName": "v3.1-beta.19",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.19/WebCode-Android-v3.1-beta.19.apk",
-  "notes": "修复：proot 安装 ETXTBSY（组件存在即跳过覆盖，避免写运行中二进制）。"
+  "versionCode": 22,
+  "versionName": "v3.1-beta.20",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.20/WebCode-Android-v3.1-beta.20.apk",
+  "notes": "修复：root 模式 proot 找不到 libtalloc.so.2（su 清空环境变量，已显式 export LD_LIBRARY_PATH 等）。"
 }
