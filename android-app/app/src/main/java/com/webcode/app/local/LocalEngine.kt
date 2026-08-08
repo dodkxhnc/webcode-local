@@ -864,6 +864,7 @@ class LocalEngine(context: Context) : ChatEngine {
         const val KEY_AUTO_ENTER = "auto_enter"
         const val KEY_ROOTFS = "use_rootfs"
         const val KEY_TTY_ACCESS = "tty_access_enabled"
+        const val KEY_ROOT_MODE = "root_mode"
 
         fun saveConfig(context: Context, apiKey: String, baseUrl: String, model: String, reasoning: String? = null) {
             val ed = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -949,6 +950,28 @@ class LocalEngine(context: Context) : ChatEngine {
         fun setTtyAccess(context: Context, v: Boolean) {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putBoolean(KEY_TTY_ACCESS, v).apply()
+        }
+
+        /** 原生 root 模式：以 root 身份运行 proot，并挂载手机根目录到 rootfs /mnt/root */
+        fun rootMode(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_ROOT_MODE, false)
+
+        fun setRootMode(context: Context, v: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_ROOT_MODE, v).apply()
+        }
+
+        /** 检测手机是否可用 su（root 权限） */
+        fun isRootAvailable(): Boolean {
+            return try {
+                val p = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
+                val out = p.inputStream.bufferedReader().readText()
+                p.waitFor(5000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                out.contains("uid=0")
+            } catch (e: Exception) {
+                false
+            }
         }
 
         fun reasoningSetting(context: Context): String =
