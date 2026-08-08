@@ -160,7 +160,8 @@ class FloatingChatService : Service(), ChatListener {
             return
         }
         showBubble()
-        // 小窗自己的会话记忆优先（重启后恢复小窗上次使用的会话），否则继承全屏最近会话
+        // 小窗自己的会话记忆优先（重启后恢复小窗上次使用的会话），否则继承全屏最近会话；
+        // 都无效时不自动创建（等用户发消息时才建），避免服务频繁重启产生大量空会话
         val engine = LocalEngine.getInstance(appContext())
         val floatLast = getSharedPreferences("float", MODE_PRIVATE).getString("last_session", null)
         if (floatLast != null && engine?.floatGet(floatLast) != null) {
@@ -172,8 +173,6 @@ class FloatingChatService : Service(), ChatListener {
             last != engine.runningSessionId()
         ) {
             loadSession(last)
-        } else {
-            newSession()
         }
     }
 
