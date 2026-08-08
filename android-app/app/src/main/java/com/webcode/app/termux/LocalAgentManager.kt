@@ -259,20 +259,7 @@ object LocalAgentManager {
         val rootMode = com.webcode.app.local.LocalEngine.rootMode(context)
         val startArgs: List<String>
         if (rootMode) {
-            val mounts = com.webcode.app.local.LocalEngine.mountPaths(context)
-            for ((idx, mp) in mounts.withIndex()) {
-                val src = java.io.File(mp)
-                if (!src.exists()) continue
-                val guestPath = if (idx == 0) "/mnt/external" else "/mnt/external-$idx"
-                val targetDir = java.io.File(root, guestPath.trimStart('/'))
-                targetDir.mkdirs()
-                try {
-                    Runtime.getRuntime().exec(
-                        arrayOf("su", "-c", "mount --bind '${src.absolutePath}' '${targetDir.absolutePath}'")
-                    ).waitFor()
-                } catch (e: Exception) {
-                }
-            }
+            TermuxRuntime.mountExternalWithRoot(root, com.webcode.app.local.LocalEngine.mountPaths(context))
             startArgs = listOf("su", "-c", "exec " + TermuxRuntime.buildCmdLine(args))
         } else {
             startArgs = args
