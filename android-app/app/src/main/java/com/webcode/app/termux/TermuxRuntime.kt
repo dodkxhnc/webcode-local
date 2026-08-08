@@ -289,6 +289,16 @@ object TermuxRuntime {
         return host.absolutePath
     }
 
+    /** 参数列表安全拼接为命令行（su -c 用） */
+    fun buildCmdLine(args: List<String>): String =
+        args.joinToString(" ") { a ->
+            if (a.any { it == ' ' || it == '\t' || it == '"' || it == '\'' || it == '$' || it == '\\' || it == ';' || it == '&' || it == '|' || it == '<' || it == '>' || it == '(' || it == ')' }) {
+                "\"" + a.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+            } else {
+                a
+            }
+        }
+
     private fun copyAssetTo(asset: String, target: File) {
         target.parentFile?.mkdirs()
         appContext.assets.open(asset).use { input ->
