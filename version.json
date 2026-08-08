@@ -1,6 +1,6 @@
 {
-  "versionCode": 19,
-  "versionName": "v3.1-beta.17",
-  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.17/WebCode-Android-v3.1-beta.17.apk",
-  "notes": "修复：不再自动疯狂创建会话；root 模式改为 su mount --bind 真实挂载外部路径到 /mnt/external。"
+  "versionCode": 20,
+  "versionName": "v3.1-beta.18",
+  "apkUrl": "https://github.com/dodkxhnc/webcode-local/releases/download/v3.1-beta.18/WebCode-Android-v3.1-beta.18.apk",
+  "notes": "修复：session 疯狂增长（终端会话结束不再自动重建、root 模式 mount 移后台+超时防 ANR、保底创建加诊断日志）。"
 }
